@@ -1,6 +1,19 @@
-# Boop
+<p align="center">
+  <img src="https://github.com/chrisgreg/boop/raw/main/docs/boop.png" width="160" alt="Boop logo" />
+
+  <h1 align="center">Boop</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/github/actions/workflow/status/chrisgreg/boop/ci.yml?branch=main" alt="CI" />
+  <img src="https://img.shields.io/github/go-mod/go-version/chrisgreg/boop?filename=server%2Fgo.mod" alt="Go version" />
+  <img src="https://img.shields.io/github/license/chrisgreg/boop" alt="License" />
+</p>
 
 A tiny, self-hosted notification inbox for developers. Something happened in one of your apps; Boop tells you on your phone.
+
+One Go binary, one SQLite file, one Docker container. Pushes go straight from your server to Apple's APNs. There is no hosted relay, account system, or telemetry.
+
+</p>
 
 ```bash
 curl https://boop.example.com/api/v1/events \
@@ -8,8 +21,6 @@ curl https://boop.example.com/api/v1/events \
   -H "Content-Type: application/json" \
   -d '{"title": "Backup complete", "level": "success"}'
 ```
-
-One Go binary, one SQLite file, one Docker container. Pushes go straight from your server to Apple's APNs. There is no hosted relay, account system, or telemetry.
 
 ## What is in the box
 
@@ -23,7 +34,7 @@ One Go binary, one SQLite file, one Docker container. Pushes go straight from yo
 ## Quick start (Docker)
 
 ```bash
-git clone https://github.com/chrisgregori/boop && cd boop
+git clone https://github.com/chrisgreg/boop && cd boop
 cp .env.example .env          # optional: BOOP_BASE_URL and APNS_* values
 mkdir -p data && chown 1000:1000 data   # Linux hosts only; the container runs as uid 1000
 docker compose up -d --build

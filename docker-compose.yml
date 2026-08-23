@@ -2,7 +2,7 @@ services:
   boop:
     build:
       context: ./server
-    image: ghcr.io/chrisgregori/boop:latest
+    image: ghcr.io/chrisgreg/boop:latest
     restart: unless-stopped
     ports:
       - "8080:8080"

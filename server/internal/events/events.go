@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/events/levels"
-	"github.com/chrisgregori/boop/server/internal/events/redact"
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/events/levels"
+	"github.com/chrisgreg/boop/server/internal/events/redact"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // ErrNotFound is returned for unknown event ids.

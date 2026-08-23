@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // Secret prefixes.

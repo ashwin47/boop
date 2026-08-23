@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // Well-known keys.

@@ -9,10 +9,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/chrisgregori/boop/server/internal/auth"
-	"github.com/chrisgregori/boop/server/internal/database"
-	"github.com/chrisgregori/boop/server/internal/events/levels"
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/auth"
+	"github.com/chrisgreg/boop/server/internal/database"
+	"github.com/chrisgreg/boop/server/internal/events/levels"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // ErrNotFound is returned when a project does not exist.

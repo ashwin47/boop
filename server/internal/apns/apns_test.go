@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/chrisgregori/boop/server/internal/config"
+	"github.com/chrisgreg/boop/server/internal/config"
 )
 
 func testKey(t *testing.T) (*ecdsa.PrivateKey, []byte) {

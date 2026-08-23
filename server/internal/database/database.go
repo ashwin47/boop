@@ -13,7 +13,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/chrisgregori/boop/server/migrations"
+	"github.com/chrisgreg/boop/server/migrations"
 )
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL

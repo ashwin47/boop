@@ -1,4 +1,4 @@
-module github.com/chrisgregori/boop/server
+module github.com/chrisgreg/boop/server
 
 go 1.27.0
 

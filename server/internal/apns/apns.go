@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/config"
+	"github.com/chrisgreg/boop/server/internal/config"
 )
 
 // Hosts for the two APNs environments.

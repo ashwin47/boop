@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chrisgregori/boop/server/internal/auth"
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/auth"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // ErrNotFound is returned for unknown devices.

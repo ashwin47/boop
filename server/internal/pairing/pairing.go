@@ -8,9 +8,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/auth"
-	"github.com/chrisgregori/boop/server/internal/devices"
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/auth"
+	"github.com/chrisgreg/boop/server/internal/devices"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // TTL is how long a pairing token stays valid.

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/ids"
 )
 
 // SessionCookie is the name of the admin session cookie.

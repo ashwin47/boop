@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/apns"
-	"github.com/chrisgregori/boop/server/internal/devices"
-	"github.com/chrisgregori/boop/server/internal/events"
-	"github.com/chrisgregori/boop/server/internal/events/levels"
-	"github.com/chrisgregori/boop/server/internal/ids"
-	"github.com/chrisgregori/boop/server/internal/projects"
+	"github.com/chrisgreg/boop/server/internal/apns"
+	"github.com/chrisgreg/boop/server/internal/devices"
+	"github.com/chrisgreg/boop/server/internal/events"
+	"github.com/chrisgreg/boop/server/internal/events/levels"
+	"github.com/chrisgreg/boop/server/internal/ids"
+	"github.com/chrisgreg/boop/server/internal/projects"
 )
 
 // Sender is the subset of *apns.Client the dispatcher needs.

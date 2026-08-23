@@ -14,16 +14,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrisgregori/boop/server/internal/apns"
-	"github.com/chrisgregori/boop/server/internal/auth"
-	"github.com/chrisgregori/boop/server/internal/config"
-	"github.com/chrisgregori/boop/server/internal/database"
-	"github.com/chrisgregori/boop/server/internal/delivery"
-	"github.com/chrisgregori/boop/server/internal/devices"
-	"github.com/chrisgregori/boop/server/internal/events"
-	"github.com/chrisgregori/boop/server/internal/pairing"
-	"github.com/chrisgregori/boop/server/internal/projects"
-	"github.com/chrisgregori/boop/server/internal/settings"
+	"github.com/chrisgreg/boop/server/internal/apns"
+	"github.com/chrisgreg/boop/server/internal/auth"
+	"github.com/chrisgreg/boop/server/internal/config"
+	"github.com/chrisgreg/boop/server/internal/database"
+	"github.com/chrisgreg/boop/server/internal/delivery"
+	"github.com/chrisgreg/boop/server/internal/devices"
+	"github.com/chrisgreg/boop/server/internal/events"
+	"github.com/chrisgreg/boop/server/internal/pairing"
+	"github.com/chrisgreg/boop/server/internal/projects"
+	"github.com/chrisgreg/boop/server/internal/settings"
 )
 
 // fakeSender records notifications instead of talking to APNs.
