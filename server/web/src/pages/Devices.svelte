@@ -8,10 +8,13 @@
   import Notice from '../lib/ui/Notice.svelte'
   import Empty from '../lib/ui/Empty.svelte'
   import CodeBlock from '../lib/ui/CodeBlock.svelte'
+  import { panel, soft, pop, reorder } from '../lib/motion'
+  import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let { embedded = false, onpaired }: { embedded?: boolean; onpaired?: () => void } = $props()
 
   let devices = $state<Device[]>([])
+  let loaded = $state(false)
   let pairing = $state<PairingToken | null>(null)
   let error = $state('')
   let now = $state(new Date())
@@ -23,6 +26,8 @@
       now = new Date()
     } catch (e: any) {
       error = e.message
+    } finally {
+      loaded = true
     }
   }
 
@@ -74,7 +79,7 @@
 </script>
 
 <div class="stack">
-  {#if error}<Notice tone="bad">{error}</Notice>{/if}
+  {#if error}<div transition:panel><Notice tone="bad">{error}</Notice></div>{/if}
 
   <Card title="Pair iPhone">
     {#snippet action()}
@@ -85,7 +90,7 @@
       {/if}
     {/snippet}
     {#if pairing}
-      <div class="pair">
+      <div class="pair" in:pop>
         <QR data={qrJSON} />
         <div class="pair-text">
           <div class="setting">Scan with the Boop app</div>
@@ -96,23 +101,25 @@
         </div>
       </div>
       {#if showPayload}
-        <div style="margin-top: 16px"><CodeBlock code={qrJSON} wrap /></div>
+        <div style="margin-top: 16px" transition:panel><CodeBlock code={qrJSON} wrap /></div>
       {/if}
     {:else}
-      <p class="secondary lead">Generates a one-time QR code that the Boop iOS app scans to connect to this server. Nothing to type.</p>
+      <p class="secondary lead" in:soft>Generates a one-time QR code that the Boop iOS app scans to connect to this server. Nothing to type.</p>
     {/if}
   </Card>
 
   {#if !embedded}
     <Card title="Paired devices" flush>
-      {#if devices.length === 0}
+      {#if !loaded}
+        <Skeleton rows={2} />
+      {:else if devices.length === 0}
         <Empty title="No devices paired">Pair an iPhone above to start receiving pushes.</Empty>
       {:else}
         <div class="thead caption faint">
           <div>Name</div><div>Push</div><div class="r">Last seen</div><div></div>
         </div>
         {#each devices as d (d.id)}
-          <div class="dev">
+          <div class="dev" animate:reorder in:soft out:soft>
             <div class="dn">
               <div class="setting">{d.name}</div>
               <div class="caption faint">{d.platform}{d.app_bundle_id ? ` · ${d.app_bundle_id}` : ''} · paired {relative(d.created_at, now)}</div>

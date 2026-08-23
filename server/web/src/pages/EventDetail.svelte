@@ -9,6 +9,9 @@
   import Notice from '../lib/ui/Notice.svelte'
   import Empty from '../lib/ui/Empty.svelte'
   import StatusDot from '../lib/ui/StatusDot.svelte'
+  import ProjectIcon from '../lib/ui/ProjectIcon.svelte'
+  import { panel } from '../lib/motion'
+  import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let { id }: { id: string } = $props()
   let event = $state<Event | null>(null)
@@ -45,12 +48,23 @@
   {#if error}
     <Notice tone="bad">{error}</Notice>
   {:else if !event}
-    <Card><Empty title="Loading" /></Card>
+    <Card>
+      <Skeleton lines={1} height={12} width="40%" />
+      <div style="margin-top: 12px"><Skeleton lines={1} height={24} width="55%" /></div>
+      <div style="margin-top: 10px"><Skeleton lines={1} height={14} width="70%" /></div>
+      <div class="facts" style="margin-top: 24px">
+        <Skeleton lines={2} height={11} widths={['40%', '80%']} />
+        <Skeleton lines={2} height={11} widths={['40%', '80%']} />
+      </div>
+    </Card>
+    <Card><Skeleton lines={3} height={12} widths={['30%', '90%', '75%']} /></Card>
+    <Card><Skeleton lines={4} height={12} widths={['30%', '95%', '85%', '60%']} /></Card>
   {:else}
+    <div class="stack rise">
     <Card>
       <div class="head">
         <div class="meta">
-          <span class="secondary proj">{#if event.project_icon}<span>{event.project_icon}</span>{/if}<span>{event.project_name}</span></span>
+          <span class="secondary proj"><ProjectIcon icon={event.project_icon} size={14} /><span>{event.project_name}</span></span>
           <span class="faint">·</span>
           <LevelBadge level={event.level} />
           {#if event.source}<span class="faint">·</span><span class="muted">{event.source}</span>{/if}
@@ -150,7 +164,7 @@
         <button type="button" class="linkish" onclick={() => (showRaw = !showRaw)}>{showRaw ? 'Hide' : 'Show'}</button>
       {/snippet}
       {#if showRaw}
-        <CodeBlock code={JSON.stringify(event, null, 2)} />
+        <div transition:panel><CodeBlock code={JSON.stringify(event, null, 2)} /></div>
       {:else}
         <div class="muted">{Object.keys(data).length} top-level keys</div>
       {/if}
@@ -172,11 +186,23 @@
         </div>
       {/if}
     </Card>
+    </div>
   {/if}
 </div>
 
 <style>
   .crumb { display: flex; gap: 8px; align-items: center; font: var(--up-type-meta); }
+  /* Cards rise in one after another once the event has loaded. */
+  .rise > :global(*) { animation: rise 220ms cubic-bezier(0.2, 0, 0, 1) both; }
+  .rise > :global(:nth-child(1)) { animation-delay: 0ms; }
+  .rise > :global(:nth-child(2)) { animation-delay: 40ms; }
+  .rise > :global(:nth-child(3)) { animation-delay: 80ms; }
+  .rise > :global(:nth-child(4)) { animation-delay: 120ms; }
+  .rise > :global(:nth-child(5)) { animation-delay: 160ms; }
+  .rise > :global(:nth-child(6)) { animation-delay: 200ms; }
+  .rise > :global(:nth-child(n + 7)) { animation-delay: 240ms; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .rise > :global(*) { animation: none; } }
   .head { display: flex; flex-direction: column; gap: 8px; }
   .proj { display: inline-flex; gap: 6px; align-items: center; }
   .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font: var(--up-type-meta); }

@@ -11,11 +11,15 @@
   import CodeBlock from '../lib/ui/CodeBlock.svelte'
   import Notice from '../lib/ui/Notice.svelte'
   import Empty from '../lib/ui/Empty.svelte'
+  import ProjectIcon from '../lib/ui/ProjectIcon.svelte'
+  import IconPicker from '../lib/ui/IconPicker.svelte'
+  import { panel, soft, pop, reorder } from '../lib/motion'
+  import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let projects = $state<Project[]>([])
+  let loaded = $state(false)
   let error = $state('')
   let newName = $state('')
-  let newIcon = $state('')
   let creating = $state(false)
   let revealed = $state<ProjectCreated | null>(null)
   let editing = $state<string | null>(null)
@@ -26,6 +30,8 @@
       projects = (await api.projects()).projects
     } catch (e: any) {
       error = e.message
+    } finally {
+      loaded = true
     }
   }
   $effect(() => {
@@ -37,9 +43,8 @@
     creating = true
     error = ''
     try {
-      revealed = await api.createProject({ name: newName.trim(), icon: newIcon.trim() || undefined })
+      revealed = await api.createProject({ name: newName.trim() })
       newName = ''
-      newIcon = ''
       await load()
     } catch (e: any) {
       error = e.message
@@ -80,9 +85,10 @@
 </script>
 
 <div class="stack">
-  {#if error}<Notice tone="bad">{error}</Notice>{/if}
+  {#if error}<div transition:panel><Notice tone="bad">{error}</Notice></div>{/if}
 
   {#if revealed}
+    <div transition:panel>
     <Card title="API key for {revealed.name}">
       <p class="secondary lead">Copy this key now. It is shown once and only a hash is stored.</p>
       <CodeBlock code={revealed.api_key} />
@@ -92,6 +98,7 @@
       />
       <div class="actions"><Button variant="secondary" onclick={() => (revealed = null)}>Done</Button></div>
     </Card>
+    </div>
   {/if}
 
   <Card title="New project">
@@ -103,34 +110,41 @@
       }}
     >
       <Input bind:value={newName} placeholder="Project name" aria-label="Project name" maxlength={80} required />
-      <Input bind:value={newIcon} placeholder="Icon" aria-label="Icon (optional)" maxlength={4} style="width: 72px" />
       <Button type="submit" disabled={creating || !newName.trim()}>Create</Button>
     </form>
-    <p class="muted caption" style="margin-top: 8px">Each project gets its own API key. The icon is optional (an emoji or short text).</p>
+    <p class="muted caption" style="margin-top: 8px">Each project gets its own API key and a shape icon you can change in its settings.</p>
   </Card>
 
-  {#if projects.length === 0}
+  {#if !loaded}
+    {#each [0, 1] as i (i)}
+      <Card>
+        <Skeleton lines={2} height={13} widths={['35%', '55%']} />
+      </Card>
+    {/each}
+  {:else if projects.length === 0}
     <Card><Empty title="No projects yet">Create one above to get an API key.</Empty></Card>
   {/if}
 
   {#each projects as p (p.id)}
-    <Card title={(p.icon ? p.icon + ' ' : '') + p.name}>
+    <div animate:reorder in:soft>
+    <Card>
       {#snippet action()}
         <div class="row">
           <Button variant="ghost" size="sm" onclick={() => (editing = editing === p.id ? null : p.id)}>{editing === p.id ? 'Close' : 'Settings'}</Button>
         </div>
       {/snippet}
+      <div class="pname"><ProjectIcon icon={p.icon} size={18} /><span class="n">{p.name}</span></div>
       <div class="pmeta muted caption">
         <span class="mono">{p.slug}</span> · {p.notify ? `notify ≥ ${LEVEL_LABEL[p.min_level].toLowerCase()}` : 'notifications off'} · created {relative(p.created_at)}
       </div>
 
       {#if editing === p.id}
-        <div class="edit">
+        <div class="edit" transition:panel>
           <SettingRow label="Name">
             <Input value={p.name} onchange={(e) => patch(p, { name: (e.currentTarget as HTMLInputElement).value })} style="width: 200px" />
           </SettingRow>
-          <SettingRow label="Icon" hint="Shown next to the project name in the inbox.">
-            <Input value={p.icon} onchange={(e) => patch(p, { icon: (e.currentTarget as HTMLInputElement).value })} style="width: 80px" maxlength={4} />
+          <SettingRow label="Icon" hint="An abstract shape from the palette, shown next to the project name in the inbox and on your phone.">
+            <IconPicker value={p.icon} onchange={(v) => patch(p, { icon: v })} />
           </SettingRow>
           <SettingRow label="Push notifications" hint="Turn off to store events without notifying your phone.">
             <Switch checked={p.notify} onchange={(v) => patch(p, { notify: v })} label="Push notifications" />
@@ -143,7 +157,7 @@
           </SettingRow>
           <SettingRow label="Delete project" hint="Removes the project and every event it received.">
             {#if confirmDelete === p.id}
-              <div class="row">
+              <div class="row" in:pop>
                 <Button variant="secondary" size="sm" onclick={() => (confirmDelete = null)}>Cancel</Button>
                 <Button variant="danger" size="sm" onclick={() => remove(p)}>Confirm delete</Button>
               </div>
@@ -154,6 +168,7 @@
         </div>
       {/if}
     </Card>
+    </div>
   {/each}
 </div>
 
@@ -162,7 +177,9 @@
   .actions { display: flex; justify-content: flex-end; margin-top: var(--up-space-4); }
   .new { display: flex; gap: var(--up-space-3); align-items: center; }
   .new :global(input:first-child) { flex: 1; }
-  .pmeta { margin-top: -8px; }
+  .pname { display: flex; align-items: center; gap: 8px; margin-top: -8px; }
+  .n { font: var(--up-type-row-title); }
+  .pmeta { margin-top: 2px; }
   .edit { margin-top: var(--up-space-4); }
   @media (max-width: 520px) {
     .new { flex-wrap: wrap; }

@@ -94,6 +94,12 @@ export interface Status {
   last_push: Delivery | null
   retention_days: number
   setup_completed: boolean
+  admin_auth: boolean
+}
+
+export interface AuthState {
+  auth_required: boolean
+  authenticated: boolean
 }
 
 export interface Settings {
@@ -124,12 +130,23 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     parsed = null
   }
   if (!res.ok) {
+    if (res.status === 401 && parsed?.error === 'login_required') onLoginRequired?.()
     throw new ApiError(res.status, parsed?.error ?? 'error', parsed?.message ?? `Request failed (${res.status})`)
   }
   return parsed as T
 }
 
+/** Called on any 401 with login_required so the app can show the sign-in screen. */
+export let onLoginRequired: (() => void) | null = null
+export function setLoginHandler(fn: () => void) {
+  onLoginRequired = fn
+}
+
 export const api = {
+  me: () => request<AuthState>('GET', '/api/v1/auth/me'),
+  login: (username: string, password: string) => request<AuthState>('POST', '/api/v1/auth/login', { username, password }),
+  logout: () => request<void>('POST', '/api/v1/auth/logout'),
+
   status: () => request<Status>('GET', '/api/v1/status'),
   settings: () => request<Settings>('GET', '/api/v1/settings'),
   updateSettings: (patch: Partial<Settings>) => request<Settings>('PATCH', '/api/v1/settings', patch),

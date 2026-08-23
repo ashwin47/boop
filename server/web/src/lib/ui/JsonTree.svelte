@@ -1,6 +1,7 @@
 <script lang="ts">
   // Expandable JSON viewer for unrecognised event data.
   import JsonTree from './JsonTree.svelte'
+  import { panel } from '../motion'
   let { value, name, depth = 0, open = depth < 1 }: { value: unknown; name?: string; depth?: number; open?: boolean } = $props()
   // svelte-ignore state_referenced_locally
   let expanded = $state(open)
@@ -17,9 +18,11 @@
       <span class="summary">{summary}</span>
     </button>
     {#if expanded}
-      {#each entries as [k, v] (k)}
-        <JsonTree value={v} name={k} depth={depth + 1} />
-      {/each}
+      <div transition:panel>
+        {#each entries as [k, v] (k)}
+          <JsonTree value={v} name={k} depth={depth + 1} />
+        {/each}
+      </div>
     {/if}
   {:else}
     <div class="line leaf">
@@ -48,6 +51,7 @@
   .leaf { cursor: default; }
   button.line:hover { background: var(--up-bg-hover); }
   .chev { color: var(--up-text-inactive); width: 10px; display: inline-block; font-size: 10px; }
+  .chev { transition: transform 120ms ease-out; }
   .chev.open { transform: rotate(90deg); display: inline-block; }
   .key { color: var(--up-text-secondary); }
   .colon { color: var(--up-text-faint); }

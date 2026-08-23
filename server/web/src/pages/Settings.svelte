@@ -10,6 +10,8 @@
   import Notice from '../lib/ui/Notice.svelte'
   import CodeBlock from '../lib/ui/CodeBlock.svelte'
   import Metric from '../lib/ui/Metric.svelte'
+  import { panel, pop, reorder, soft } from '../lib/motion'
+  import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let status = $state<Status | null>(null)
   let settings = $state<Settings | null>(null)
@@ -85,10 +87,20 @@
 </script>
 
 <div class="stack">
-  {#if error}<Notice tone="bad">{error}</Notice>{/if}
+  {#if error}<div transition:panel><Notice tone="bad">{error}</Notice></div>{/if}
+
+  {#if !status && !error}
+    <div class="metrics">
+      {#each [0, 1, 2, 3] as i (i)}
+        <Card><Skeleton lines={2} height={12} widths={['50%', '35%']} /></Card>
+      {/each}
+    </div>
+    <Card><Skeleton lines={1} height={13} width="20%" /><div class="status" style="margin-top: 16px">{#each [0, 1, 2, 3, 4, 5] as i (i)}<Skeleton lines={2} height={11} widths={['40%', '70%']} />{/each}</div></Card>
+    <Card><Skeleton lines={3} height={12} widths={['35%', '80%', '60%']} /></Card>
+  {/if}
 
   {#if status}
-    <div class="metrics">
+    <div class="metrics" in:soft>
       <Card><Metric label="Events" value={compact(status.events)} /></Card>
       <Card><Metric label="Projects" value={String(status.projects)} /></Card>
       <Card><Metric label="Devices" value={String(status.devices)} delta={status.pushable_devices < status.devices ? `${status.pushable_devices} with push` : undefined} tone="neutral" /></Card>
@@ -121,6 +133,10 @@
         <div><span class="k">Database path</span><span class="mono">{status.database_path}</span></div>
         <div><span class="k">Base URL</span><span class="mono">{status.base_url}</span></div>
         <div><span class="k">Retention</span><span>{retentionLabel(status.retention_days)}</span></div>
+        <div>
+          <span class="k">Admin login</span>
+          {#if status.admin_auth}<StatusDot tone="ok">Enabled</StatusDot>{:else}<StatusDot tone="warn">Off · set BOOP_ADMIN_USER and BOOP_ADMIN_PASSWORD</StatusDot>{/if}
+        </div>
       </div>
       {#if !status.apns.configured}
         <div style="margin-top: 16px">
@@ -153,7 +169,7 @@
         <Button onclick={sendTest} disabled={testing || projects.length === 0}>{testing ? 'Sending' : 'Send test notification'}</Button>
       </div>
       {#if testResult}
-        <div style="margin-top: 16px">
+        <div style="margin-top: 16px" transition:panel>
           {#if testResult.deliveries.length === 0}
             <Notice tone="info">Event created. No paired phones with push registered, so nothing was sent.</Notice>
           {:else if !testResult.apns_configured}
@@ -186,7 +202,7 @@
           <span class="pill muted">{k}</span>
         {/each}
         {#each settings.redact_keys as k (k)}
-          <span class="pill custom">{k}<button type="button" aria-label="Remove {k}" onclick={() => removeKey(k)}>×</button></span>
+          <span class="pill custom" in:pop out:soft animate:reorder>{k}<button type="button" aria-label="Remove {k}" onclick={() => removeKey(k)}>×</button></span>
         {/each}
       </div>
       <form

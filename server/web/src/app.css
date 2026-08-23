@@ -111,3 +111,9 @@ h1, h2, h3, p { margin: 0; }
 @media (max-width: 600px) {
   :root { --up-page-pad: 16px; }
 }
+
+/* Interaction feedback: colour/background only, no motion, per the design system. */
+button, a, select, input { transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

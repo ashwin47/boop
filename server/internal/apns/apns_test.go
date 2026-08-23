@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/chrisgregori/boop/server/internal/config"
 )
 
 func testKey(t *testing.T) (*ecdsa.PrivateKey, []byte) {
@@ -139,5 +141,25 @@ func TestSendRetriesOn5xxAndReportsUnregistered(t *testing.T) {
 	}
 	if atomic.LoadInt32(&calls) != 2 {
 		t.Errorf("calls = %d, want 2 (one retry)", calls)
+	}
+}
+
+func TestNewAcceptsBase64PrivateKey(t *testing.T) {
+	_, pemBytes := testKey(t)
+	cfg := config.APNS{TeamID: "T", KeyID: "K", BundleID: "b", Environment: "sandbox", PrivateKey: base64.StdEncoding.EncodeToString(pemBytes)}
+	c, err := New(cfg)
+	if err != nil {
+		t.Fatalf("base64 key: %v", err)
+	}
+	if c.Host() != HostSandbox {
+		t.Errorf("host = %s", c.Host())
+	}
+	cfg.PrivateKey = string(pemBytes)
+	if _, err := New(cfg); err != nil {
+		t.Fatalf("pem key: %v", err)
+	}
+	cfg.PrivateKey = "not a key"
+	if _, err := New(cfg); err == nil {
+		t.Fatal("garbage should fail")
 	}
 }

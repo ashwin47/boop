@@ -42,6 +42,7 @@ type Server struct {
 	Dispatcher *delivery.Dispatcher
 	APNS       *apns.Client // nil when not configured
 	APNSError  string       // why APNS is nil
+	Admin      *auth.Admin  // web UI / admin API login; open when not enabled
 	StartedAt  time.Time
 	Web        http.Handler
 }
@@ -50,6 +51,11 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+
+	// Admin session.
+	mux.HandleFunc("GET /api/v1/auth/me", s.authMe)
+	mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.authLogout)
 
 	// Event ingestion: project API key.
 	mux.Handle("POST /api/v1/events", s.projectAuth(s.createEvent))
@@ -73,6 +79,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Admin.
 	mux.Handle("GET /api/v1/projects", s.adminAuth(s.listProjects))
+	mux.HandleFunc("GET /api/v1/projects/icons", s.projectIcons)
 	mux.Handle("POST /api/v1/projects", s.adminAuth(s.createProject))
 	mux.Handle("GET /api/v1/projects/{id}", s.adminAuth(s.getProject))
 	mux.Handle("PATCH /api/v1/projects/{id}", s.adminAuth(s.updateProject))
@@ -162,6 +169,10 @@ func (s *Server) readerAuth(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cred := auth.Bearer(r)
 		if cred == "" {
+			if !s.Admin.Authorized(r) {
+				writeError(w, http.StatusUnauthorized, "login_required", "sign in to the Boop web UI")
+				return
+			}
 			next(w, r)
 			return
 		}
@@ -174,17 +185,62 @@ func (s *Server) readerAuth(next http.HandlerFunc) http.Handler {
 	})
 }
 
-// adminAuth serves the web UI. Boop has no accounts in v1: the UI is expected
-// to sit behind the operator's own HTTPS/proxy. Project and device credentials
-// are explicitly refused so that a leaked client secret grants no admin rights.
+// adminAuth serves the web UI and admin API. When BOOP_ADMIN_USER/PASSWORD are
+// set, a session cookie (from /auth/login) or HTTP Basic credentials are
+// required; otherwise it is open and expected to sit behind the operator's own
+// proxy. Project and device credentials are explicitly refused so that a
+// leaked client secret grants no admin rights.
 func (s *Server) adminAuth(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cred := auth.Bearer(r); cred != "" {
 			writeError(w, http.StatusForbidden, "forbidden", "project and device credentials cannot perform administrative actions")
 			return
 		}
+		if !s.Admin.Authorized(r) {
+			writeError(w, http.StatusUnauthorized, "login_required", "sign in to the Boop web UI")
+			return
+		}
 		next(w, r)
 	})
+}
+
+// ---- admin session ----
+
+func (s *Server) authMe(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"auth_required": s.Admin.Enabled(), "authenticated": s.Admin.Authorized(r)})
+}
+
+func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.Admin.Enabled() {
+		writeJSON(w, http.StatusOK, map[string]any{"auth_required": false, "authenticated": true})
+		return
+	}
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	tok, ok := s.Admin.Login(in.Username, in.Password)
+	if !ok {
+		// Slow down guessing a little; there is one account and no lockout.
+		time.Sleep(400 * time.Millisecond)
+		s.Log.Warn("auth.login_failed", "remote", r.RemoteAddr)
+		writeError(w, http.StatusUnauthorized, "bad_credentials", "wrong username or password")
+		return
+	}
+	s.Admin.SetCookie(w, r, tok)
+	s.Log.Info("auth.login", "remote", r.RemoteAddr)
+	writeJSON(w, http.StatusOK, map[string]any{"auth_required": true, "authenticated": true})
+}
+
+func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(auth.SessionCookie); err == nil {
+		s.Admin.Logout(c.Value)
+	}
+	s.Admin.ClearCookie(w, r)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // deviceOrAdmin allows a device to act on itself, or the web UI on anything.
@@ -192,6 +248,10 @@ func (s *Server) deviceOrAdmin(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cred := auth.Bearer(r)
 		if cred == "" {
+			if !s.Admin.Authorized(r) {
+				writeError(w, http.StatusUnauthorized, "login_required", "sign in to the Boop web UI")
+				return
+			}
 			next(w, r)
 			return
 		}
@@ -291,6 +351,7 @@ type statusResponse struct {
 	LastPush       *delivery.Delivery `json:"last_push"`
 	RetentionDays  int                `json:"retention_days"`
 	SetupCompleted bool               `json:"setup_completed"`
+	AdminAuth      bool               `json:"admin_auth"`
 }
 
 type apnsStatus struct {
@@ -305,7 +366,7 @@ type apnsStatus struct {
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	resp := statusResponse{Version: Version, Server: "ok", Database: "ok", DatabasePath: s.Config.DatabasePath, BaseURL: s.baseURL(r), UptimeSeconds: int64(time.Since(s.StartedAt).Seconds())}
+	resp := statusResponse{Version: Version, Server: "ok", Database: "ok", DatabasePath: s.Config.DatabasePath, BaseURL: s.baseURL(r), UptimeSeconds: int64(time.Since(s.StartedAt).Seconds()), AdminAuth: s.Admin.Enabled()}
 	if err := s.DB.PingContext(ctx); err != nil {
 		resp.Database = err.Error()
 	}
@@ -512,6 +573,10 @@ func (s *Server) eventDeliveries(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- projects ----
+
+func (s *Server) projectIcons(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"shapes": projects.IconShapes, "colors": projects.IconColors})
+}
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	ps, err := s.Projects.List(r.Context())

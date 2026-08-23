@@ -16,6 +16,10 @@ type Config struct {
 	RetentionDays int
 	LogLevel      string
 
+	// Optional admin login for the web UI and admin API. Both must be set to enable it.
+	AdminUser     string
+	AdminPassword string
+
 	APNS APNS
 }
 
@@ -60,6 +64,8 @@ func Load() (Config, error) {
 		DatabasePath:  env("BOOP_DATABASE_PATH", "/data/boop.db"),
 		RetentionDays: 30,
 		LogLevel:      env("BOOP_LOG_LEVEL", "info"),
+		AdminUser:     env("BOOP_ADMIN_USER", ""),
+		AdminPassword: env("BOOP_ADMIN_PASSWORD", ""),
 		APNS: APNS{
 			TeamID:         env("APNS_TEAM_ID", ""),
 			KeyID:          env("APNS_KEY_ID", ""),
@@ -84,6 +90,12 @@ func Load() (Config, error) {
 		c.RetentionDays = d
 	}
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
+	if (c.AdminUser == "") != (c.AdminPassword == "") {
+		return c, fmt.Errorf("BOOP_ADMIN_USER and BOOP_ADMIN_PASSWORD must be set together")
+	}
+	if c.AdminPassword != "" && len(c.AdminPassword) < 8 {
+		return c, fmt.Errorf("BOOP_ADMIN_PASSWORD must be at least 8 characters")
+	}
 	if c.APNS.Environment != "production" && c.APNS.Environment != "sandbox" {
 		return c, fmt.Errorf("APNS_ENVIRONMENT must be production or sandbox, got %q", c.APNS.Environment)
 	}

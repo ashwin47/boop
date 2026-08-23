@@ -1,0 +1,74 @@
+name: Boop
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Users set their own team in Xcode (Signing & Capabilities).
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+targets:
+  Boop:
+    type: application
+    platform: iOS
+    sources:
+      - path: Boop
+        excludes:
+          - "Resources/Fonts/OFL.txt"
+      - path: Boop/Resources/Fonts/OFL.txt
+        buildPhase: none
+    settings:
+      base:
+        # Change this to your own bundle identifier. It must match APNS_BUNDLE_ID on the server.
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.Boop
+        CODE_SIGN_ENTITLEMENTS: Boop/Boop.entitlements
+        INFOPLIST_FILE: Boop/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  BoopTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [BoopTests]
+    dependencies:
+      - target: Boop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.BoopTests
+        GENERATE_INFOPLIST_FILE: YES
+  BoopUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [BoopUITests]
+    dependencies:
+      - target: Boop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.BoopUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Boop
+schemes:
+  Boop:
+    build:
+      targets:
+        Boop: all
+        BoopTests: [test]
+        BoopUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [BoopTests, BoopUITests]

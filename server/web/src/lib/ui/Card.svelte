@@ -5,7 +5,7 @@
 
 <section class="card" class:flush>
   {#if title || action}
-    <header>
+    <header class:only-action={!title}>
       {#if title}<h2>{title}</h2>{/if}
       {#if action}<div>{@render action()}</div>{/if}
     </header>
@@ -29,5 +29,6 @@
     margin-bottom: var(--up-space-4);
   }
   .flush header { padding: 0 var(--up-space-4); }
+  header.only-action { justify-content: flex-end; margin-bottom: var(--up-space-2); }
   h2 { font: var(--up-type-setting); color: var(--up-ink); }
 </style>

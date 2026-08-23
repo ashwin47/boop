@@ -16,6 +16,7 @@ import (
 
 	"github.com/chrisgregori/boop/server/internal/api"
 	"github.com/chrisgregori/boop/server/internal/apns"
+	"github.com/chrisgregori/boop/server/internal/auth"
 	"github.com/chrisgregori/boop/server/internal/config"
 	"github.com/chrisgregori/boop/server/internal/database"
 	"github.com/chrisgregori/boop/server/internal/delivery"
@@ -74,11 +75,18 @@ func run() error {
 	dispatcher := delivery.New(db, devStore, sender, log)
 	dispatcher.Start(ctx)
 
+	admin := auth.NewAdmin(cfg.AdminUser, cfg.AdminPassword)
+	if admin.Enabled() {
+		log.Info("auth.enabled", "user", cfg.AdminUser)
+	} else {
+		log.Warn("auth.disabled", "hint", "set BOOP_ADMIN_USER and BOOP_ADMIN_PASSWORD to protect the web UI")
+	}
+
 	evStore := events.New(db)
 	srv := &api.Server{
 		Config: cfg, DB: db, Log: log, Settings: st,
 		Projects: projects.New(db), Devices: devStore, Pairing: pairing.New(db, devStore), Events: evStore,
-		Dispatcher: dispatcher, APNS: client, APNSError: apnsErr, StartedAt: time.Now(), Web: web.Handler(),
+		Dispatcher: dispatcher, APNS: client, APNSError: apnsErr, Admin: admin, StartedAt: time.Now(), Web: web.Handler(),
 	}
 
 	go retentionLoop(ctx, log, st, evStore, srv.Pairing, cfg.RetentionDays)

@@ -1,5 +1,6 @@
 <script lang="ts">
   let { code, copyable = true, wrap = false }: { code: string; copyable?: boolean; wrap?: boolean } = $props()
+  import { soft } from '../motion'
   let copied = $state(false)
   function copy() {
     navigator.clipboard?.writeText(code)
@@ -11,7 +12,7 @@
 <div class="block">
   <code class:wrap>{code}</code>
   {#if copyable}
-    <button type="button" onclick={copy} class:copied>{copied ? 'Copied' : 'Copy'}</button>
+    <button type="button" onclick={copy} class:copied>{#key copied}<span in:soft>{copied ? 'Copied' : 'Copy'}</span>{/key}</button>
   {/if}
 </div>
 

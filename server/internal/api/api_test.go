@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chrisgregori/boop/server/internal/apns"
+	"github.com/chrisgregori/boop/server/internal/auth"
 	"github.com/chrisgregori/boop/server/internal/config"
 	"github.com/chrisgregori/boop/server/internal/database"
 	"github.com/chrisgregori/boop/server/internal/delivery"
@@ -71,6 +72,7 @@ func newEnv(t *testing.T) *env {
 		Pairing:    pairing.New(db, dev),
 		Events:     events.New(db),
 		Dispatcher: delivery.New(db, dev, sender, log),
+		Admin:      auth.NewAdmin("", ""),
 		StartedAt:  time.Now(),
 	}
 	srv := httptest.NewServer(s.Handler())
@@ -161,6 +163,9 @@ func TestProjectLifecycle(t *testing.T) {
 	if r.body["slug"] != "uini" || r.body["notify"] != true || r.body["min_level"] != "info" {
 		t.Errorf("project = %v", r.body)
 	}
+	if icon, _ := r.body["icon"].(string); !strings.Contains(icon, ":") {
+		t.Errorf("a default shape icon should be assigned, got %q", icon)
+	}
 
 	// Duplicate names get distinct slugs.
 	r = e.do("POST", "/api/v1/projects", "", map[string]string{"name": "Uini"})
@@ -192,6 +197,15 @@ func TestProjectLifecycle(t *testing.T) {
 	r = e.do("PATCH", "/api/v1/projects/"+id, "", map[string]any{"min_level": "fatal"})
 	if r.status != 422 {
 		t.Errorf("bad level should be 422, got %d", r.status)
+	}
+	if r := e.do("PATCH", "/api/v1/projects/"+id, "", map[string]any{"icon": "triangle:mint"}); r.status != 200 || r.body["icon"] != "triangle:mint" {
+		t.Errorf("shape icon: %d %s", r.status, r.raw)
+	}
+	if r := e.do("PATCH", "/api/v1/projects/"+id, "", map[string]any{"icon": "star:red"}); r.status != 422 {
+		t.Errorf("unknown shape should be 422, got %d", r.status)
+	}
+	if r := e.do("GET", "/api/v1/projects/icons", "", nil); r.status != 200 || len(r.body["shapes"].([]any)) == 0 {
+		t.Errorf("icons catalogue: %d %s", r.status, r.raw)
 	}
 	r = e.do("POST", "/api/v1/projects", "", map[string]string{"name": "   "})
 	if r.status != 422 {
@@ -692,5 +706,117 @@ func TestUnknownAPIRouteIsJSON404(t *testing.T) {
 	r := e.do("GET", "/api/v1/nope", "", nil)
 	if r.status != 404 || r.body["error"] != "not_found" {
 		t.Errorf("unknown route: %d %s", r.status, r.raw)
+	}
+}
+
+func TestAdminAuth(t *testing.T) {
+	e := newEnv(t)
+	e.server.Admin = auth.NewAdmin("chris", "correct horse battery")
+
+	// Unauthenticated: status says login required, admin + reader endpoints refuse.
+	r := e.do("GET", "/api/v1/auth/me", "", nil)
+	if r.body["auth_required"] != true || r.body["authenticated"] != false {
+		t.Fatalf("me: %s", r.raw)
+	}
+	if r := e.do("GET", "/api/v1/projects", "", nil); r.status != 401 || r.body["error"] != "login_required" {
+		t.Errorf("projects without login: %d %s", r.status, r.raw)
+	}
+	if r := e.do("GET", "/api/v1/events", "", nil); r.status != 401 {
+		t.Errorf("events without login: %d", r.status)
+	}
+	if r := e.do("GET", "/health", "", nil); r.status != 200 {
+		t.Errorf("health must stay open: %d", r.status)
+	}
+
+	// Wrong password.
+	if r := e.do("POST", "/api/v1/auth/login", "", map[string]string{"username": "chris", "password": "nope"}); r.status != 401 {
+		t.Errorf("bad login: %d", r.status)
+	}
+
+	// Login sets a cookie that authorises admin calls.
+	req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/auth/login", strings.NewReader(`{"username":"chris","password":"correct horse battery"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("login: %d", res.StatusCode)
+	}
+	var cookie *http.Cookie
+	for _, c := range res.Cookies() {
+		if c.Name == auth.SessionCookie {
+			cookie = c
+		}
+	}
+	if cookie == nil || !cookie.HttpOnly {
+		t.Fatalf("session cookie missing or not HttpOnly: %v", res.Cookies())
+	}
+	withCookie := func(method, path string, body any) resp {
+		var rdr io.Reader
+		if body != nil {
+			b, _ := json.Marshal(body)
+			rdr = bytes.NewReader(b)
+		}
+		req, _ := http.NewRequest(method, e.srv.URL+path, rdr)
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.AddCookie(cookie)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		raw, _ := io.ReadAll(res.Body)
+		out := resp{status: res.StatusCode, raw: raw}
+		_ = json.Unmarshal(raw, &out.body)
+		return out
+	}
+	if r := withCookie("POST", "/api/v1/projects", map[string]string{"name": "Uini"}); r.status != 201 {
+		t.Errorf("create project with session: %d %s", r.status, r.raw)
+	}
+	if r := withCookie("GET", "/api/v1/events", nil); r.status != 200 {
+		t.Errorf("events with session: %d", r.status)
+	}
+	if r := withCookie("GET", "/api/v1/status", nil); r.body["admin_auth"] != true {
+		t.Errorf("status should report admin_auth: %s", r.raw)
+	}
+
+	// HTTP Basic also works (for scripts).
+	req, _ = http.NewRequest("GET", e.srv.URL+"/api/v1/projects", nil)
+	req.SetBasicAuth("chris", "correct horse battery")
+	res, _ = http.DefaultClient.Do(req)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Errorf("basic auth: %d", res.StatusCode)
+	}
+
+	// Client credentials are still refused on admin endpoints and still work for their own purposes.
+	pid := withCookie("GET", "/api/v1/projects", nil).body["projects"].([]any)[0].(map[string]any)["id"].(string)
+	key := withCookie("POST", "/api/v1/projects/"+pid+"/rotate-key", nil).body["api_key"].(string)
+	if r := e.do("POST", "/api/v1/events", key, map[string]string{"title": "x"}); r.status != 201 {
+		t.Errorf("project key ingest under admin auth: %d %s", r.status, r.raw)
+	}
+	if r := e.do("GET", "/api/v1/projects", key, nil); r.status != 403 {
+		t.Errorf("project key on admin endpoint: %d", r.status)
+	}
+	tok := withCookie("POST", "/api/v1/pairing", nil).body["token"].(string)
+	r = e.do("POST", "/api/v1/pairing/exchange", "", map[string]string{"token": tok, "name": "phone"})
+	if r.status != 201 {
+		t.Fatalf("exchange must stay open: %d %s", r.status, r.raw)
+	}
+	cred := r.body["credential"].(string)
+	if r := e.do("GET", "/api/v1/events", cred, nil); r.status != 200 {
+		t.Errorf("device read under admin auth: %d", r.status)
+	}
+
+	// Logout revokes the session.
+	if r := withCookie("POST", "/api/v1/auth/logout", nil); r.status != 204 {
+		t.Errorf("logout: %d", r.status)
+	}
+	if r := withCookie("GET", "/api/v1/projects", nil); r.status != 401 {
+		t.Errorf("session should be revoked: %d", r.status)
 	}
 }

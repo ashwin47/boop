@@ -9,6 +9,9 @@
   import LevelBadge from '../lib/ui/LevelBadge.svelte'
   import Empty from '../lib/ui/Empty.svelte'
   import Notice from '../lib/ui/Notice.svelte'
+  import ProjectIcon from '../lib/ui/ProjectIcon.svelte'
+  import { rowIn, reorder, soft, panel } from '../lib/motion'
+  import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let events = $state<Event[]>([])
   let projects = $state<Project[]>([])
@@ -77,12 +80,13 @@
   </div>
 
   {#if error}
-    <Notice tone="bad">{error}</Notice>
+    <div transition:panel><Notice tone="bad">{error}</Notice></div>
   {/if}
 
   <Card flush>
     {#if loading && events.length === 0}
-      <Empty title="Loading" />
+      <div class="group">&nbsp;</div>
+      <Skeleton rows={6} />
     {:else if events.length === 0}
       <Empty title="No events yet">
         {#if projects.length === 0}
@@ -92,12 +96,12 @@
         {/if}
       </Empty>
     {:else}
-      {#each groups as g (g.label)}
-        <div class="group">{g.label}</div>
-        {#each g.items as e (e.id)}
-          <a class="ev" href="/events/{e.id}" onclick={link}>
+      {#each groups as g, gi (g.label)}
+        <div class="group" in:soft>{g.label}</div>
+        {#each g.items as e, i (e.id)}
+          <a class="ev" href="/events/{e.id}" onclick={link} in:rowIn={{ i: gi * 4 + i }} animate:reorder>
             <div class="proj">
-              {#if e.project_icon}<span class="icon">{e.project_icon}</span>{/if}
+              <ProjectIcon icon={e.project_icon} size={14} />
               <span>{e.project_name}</span>
             </div>
             <div class="main">

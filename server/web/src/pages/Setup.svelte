@@ -8,6 +8,9 @@
   import StatusDot from '../lib/ui/StatusDot.svelte'
   import Notice from '../lib/ui/Notice.svelte'
   import Devices from './Devices.svelte'
+  import { fly } from 'svelte/transition'
+  import { cubicOut } from 'svelte/easing'
+  import { dur, panel } from '../lib/motion'
 
   let { onfinished }: { onfinished: () => void } = $props()
 
@@ -84,8 +87,10 @@
     {/each}
   </ol>
 
-  {#if error}<Notice tone="bad">{error}</Notice>{/if}
+  {#if error}<div transition:panel><Notice tone="bad">{error}</Notice></div>{/if}
 
+  {#key step}
+  <div in:fly={{ x: 12, duration: dur(180), easing: cubicOut }} class="step-body">
   {#if step === 0}
     <Card title="Server">
       <div class="facts">
@@ -156,9 +161,11 @@
         <Button onclick={sendTest} disabled={testing || (status?.projects ?? 0) === 0}>{testing ? 'Sending' : 'Send test notification'}</Button>
         {#if (status?.projects ?? 0) === 0}<span class="muted">Create a project first.</span>{/if}
       </div>
-      {#if testMsg}<div style="margin-top: 16px"><Notice tone="info">{testMsg}</Notice></div>{/if}
+      {#if testMsg}<div style="margin-top: 16px" transition:panel><Notice tone="info">{testMsg}</Notice></div>{/if}
     </Card>
   {/if}
+  </div>
+  {/key}
 
   <div class="nav">
     <Button variant="secondary" onclick={() => (step = Math.max(0, step - 1))} disabled={step === 0}>Back</Button>
@@ -174,6 +181,7 @@
 
 <style>
   .setup { display: flex; flex-direction: column; gap: var(--up-space-5); }
+  .step-body { display: flex; flex-direction: column; gap: var(--up-space-5); }
   .hero { padding: var(--up-space-6) 0 0; display: flex; flex-direction: column; gap: 6px; }
   h1 { font: var(--up-type-metric); letter-spacing: -0.01em; }
   .hero p { font: var(--up-type-status-line); }

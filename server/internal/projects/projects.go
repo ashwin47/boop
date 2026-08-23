@@ -87,6 +87,12 @@ func (s *Store) Create(ctx context.Context, in Input) (Project, string, error) {
 	if in.Icon != nil {
 		icon = strings.TrimSpace(*in.Icon)
 	}
+	if !ValidIcon(icon) {
+		return Project{}, "", fmt.Errorf("%w: icon must be <shape>:<color> (shapes: %s) or a short emoji", ErrInvalid, strings.Join(IconShapes, ", "))
+	}
+	if icon == "" {
+		icon = DefaultIcon(Slugify(name))
+	}
 	key := auth.NewSecret(auth.PrefixProjectKey)
 	now := ids.Now()
 	p := Project{ID: ids.New("prj"), Name: name, Icon: icon, Notify: notify, MinLevel: minLevel, CreatedAt: now, UpdatedAt: now}
@@ -178,7 +184,14 @@ func (s *Store) Update(ctx context.Context, id string, in Input) (Project, error
 		p.Name = n
 	}
 	if in.Icon != nil {
-		p.Icon = strings.TrimSpace(*in.Icon)
+		icon := strings.TrimSpace(*in.Icon)
+		if !ValidIcon(icon) {
+			return Project{}, fmt.Errorf("%w: icon must be <shape>:<color> (shapes: %s) or a short emoji", ErrInvalid, strings.Join(IconShapes, ", "))
+		}
+		if icon == "" {
+			icon = DefaultIcon(p.Slug)
+		}
+		p.Icon = icon
 	}
 	if in.Notify != nil {
 		p.Notify = *in.Notify

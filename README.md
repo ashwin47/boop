@@ -107,7 +107,7 @@ All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message"
 
 Credentials: project keys (`boop_proj_...`) can only create events; device credentials (`boop_dev_...`) can only read events and manage their own device. Only SHA-256 hashes are stored.
 
-**Admin auth.** v1 has no accounts (per the PRD). The web UI and the admin endpoints are unauthenticated and refuse project/device credentials, so a leaked client secret never grants admin rights. Put Boop behind your reverse proxy, Tailscale, or basic auth; do not expose the UI to the open internet as-is.
+**Admin auth.** Set `BOOP_ADMIN_USER` and `BOOP_ADMIN_PASSWORD` and the web UI shows a sign-in screen; admin endpoints then need the session cookie it sets (`POST /api/v1/auth/login`) or HTTP Basic credentials (`curl -u user:pass …`). Sessions last 30 days and live in memory, so a restart signs everyone out. Leave both unset and everything is open — only do that behind your own proxy, Tailscale, or VPN. Either way, project and device credentials are refused on admin endpoints, so a leaked client secret never grants admin rights.
 
 ## Configuration
 
@@ -118,10 +118,13 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 | `BOOP_DATABASE_PATH` | `/data/boop.db` | WAL mode, migrations applied on start |
 | `BOOP_RETENTION_DAYS` | `30` | Initial value; changeable in the UI. `0` = keep forever |
 | `BOOP_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `BOOP_ADMIN_USER` | | Web UI / admin API username; set together with the password |
+| `BOOP_ADMIN_PASSWORD` | | 8+ characters. Unset = no login |
 | `APNS_TEAM_ID` | | Apple Developer team id |
 | `APNS_KEY_ID` | | Id of the APNs auth key |
 | `APNS_BUNDLE_ID` | | Bundle id of your Boop iOS build |
-| `APNS_PRIVATE_KEY_PATH` | | Path to the mounted `.p8` (preferred over `APNS_PRIVATE_KEY`) |
+| `APNS_PRIVATE_KEY_PATH` | | Path to the mounted `.p8` (preferred) |
+| `APNS_PRIVATE_KEY` | | Alternative: the `.p8` contents, as PEM text or base64 (`base64 -i key.p8 \| tr -d '\n'`) |
 | `APNS_ENVIRONMENT` | `production` | `sandbox` for Xcode debug builds |
 
 ## Apple setup
@@ -133,6 +136,16 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 5. Restart: `docker compose up -d`. Settings should show APNs as configured.
 6. Build the iOS app with the same bundle id, install it on your phone, open Devices → Pair iPhone, and scan the QR.
 7. Settings → Send test notification.
+
+## Deploying with Dokploy (or any compose host)
+
+1. New **Compose** application → your repo, compose path `docker-compose.yml`.
+2. Change the data volume to a named one so it survives redeploys: replace `"./data:/data"` with `boop-data:/data` and add a top-level `volumes: { boop-data: {} }` (or set a persistent mount in Dokploy's **Mounts** tab pointing at `/data`).
+3. **Environment** tab: `BOOP_BASE_URL`, `BOOP_ADMIN_USER`, `BOOP_ADMIN_PASSWORD`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, `APNS_ENVIRONMENT`.
+4. The `.p8` key, either:
+   - `APNS_PRIVATE_KEY` = `base64 -i AuthKey_XXXXXX.p8 | tr -d '\n'` (one line, easiest), or
+   - Dokploy **Mounts → File mount**: paste the `.p8` contents, mount path `/run/secrets/apns.p8`, and set `APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8`.
+5. Add a domain with HTTPS in Dokploy pointing at port `8080`; deploy. Settings in the web UI should show **APNs · Configured**.
 
 ## Pairing
 

@@ -94,7 +94,13 @@ func New(cfg config.APNS) (*Client, error) {
 	if missing := cfg.Missing(); len(missing) > 0 {
 		return nil, fmt.Errorf("missing %s", strings.Join(missing, ", "))
 	}
-	pemBytes := []byte(cfg.PrivateKey)
+	pemBytes := []byte(strings.TrimSpace(cfg.PrivateKey))
+	// APNS_PRIVATE_KEY may hold the PEM text or its base64 (handy for single-line env editors).
+	if len(pemBytes) > 0 && !strings.Contains(string(pemBytes), "-----BEGIN") {
+		if decoded, err := base64.StdEncoding.DecodeString(string(pemBytes)); err == nil {
+			pemBytes = decoded
+		}
+	}
 	if cfg.PrivateKeyPath != "" {
 		b, err := os.ReadFile(cfg.PrivateKeyPath)
 		if err != nil {
