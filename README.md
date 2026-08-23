@@ -143,20 +143,23 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 1. In the Apple Developer portal, create an App identifier for your Boop iOS build and enable Push Notifications.
 2. Under Keys, create an APNs authentication key. Download the `.p8` (only possible once). Note the Key id.
 3. Note your Team id (top right of the portal).
-4. Put the `.p8` at `./secrets/apns.p8`, uncomment the secrets volume in `docker-compose.yml`, and fill the `APNS_*` values in `.env`.
+4. Put the `.p8` at `./secrets/apns.p8`, uncomment the secrets volume in `docker-compose.yml`, set `APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8`, and fill the other `APNS_*` values in `.env`.
 5. Restart: `docker compose up -d`. Settings should show APNs as configured.
 6. Build the iOS app with the same bundle id, install it on your phone, open Devices → Pair iPhone, and scan the QR.
 7. Settings → Send test notification.
 
 ## Deploying with Dokploy (or any compose host)
 
-1. New **Compose** application → your repo, compose path `docker-compose.yml`.
-2. Change the data volume to a named one so it survives redeploys: replace `"./data:/data"` with `boop-data:/data` and add a top-level `volumes: { boop-data: {} }` (or set a persistent mount in Dokploy's **Mounts** tab pointing at `/data`).
-3. **Environment** tab: `BOOP_BASE_URL`, `BOOP_ADMIN_USER`, `BOOP_ADMIN_PASSWORD`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, `APNS_ENVIRONMENT`.
-4. The `.p8` key, either:
-   - `APNS_PRIVATE_KEY` = `base64 -i AuthKey_XXXXXX.p8 | tr -d '\n'` (one line, easiest), or
-   - Dokploy **Mounts → File mount**: paste the `.p8` contents, mount path `/run/secrets/apns.p8`, and set `APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8`.
-5. Add a domain with HTTPS in Dokploy pointing at port `8080`; deploy. Settings in the web UI should show **APNs · Configured**.
+Use `docker-compose.dokploy.yml`, not `docker-compose.yml`. It swaps the `./data` bind mount for a named volume (the bind mount is created root-owned on the host, and the image runs as uid 1000, so SQLite cannot write `/data/boop.db`), joins the external `dokploy-network` so Traefik can route to it, and drops the published port so the server is reachable only through your HTTPS proxy.
+
+1. New **Compose** application → your repo, compose path `docker-compose.dokploy.yml`.
+2. **Environment** tab: `BOOP_BASE_URL`, `BOOP_ADMIN_USER`, `BOOP_ADMIN_PASSWORD`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, `APNS_ENVIRONMENT`. Dokploy writes these to a `.env` beside the compose file, which is what `env_file` picks up.
+3. The `.p8` key, either:
+   - `APNS_PRIVATE_KEY` = `base64 -i AuthKey_XXXXXX.p8 | tr -d '\n'` (one line, easiest). **Leave `APNS_PRIVATE_KEY_PATH` unset** — if it has a value it overrides the inline key, and the resulting missing-file error is the usual reason APNs looks unconfigured after a deploy. Copying `.env.example` wholesale is how it ends up set.
+   - Or Dokploy **Mounts → File mount**: paste the `.p8` contents, mount path `/run/secrets/apns.p8`, and set `APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8`.
+4. Add a domain with HTTPS in Dokploy pointing at port `8080`; deploy. Settings in the web UI should show **APNs · Configured**.
+
+Editing the compose file in Dokploy's UI only works for **Raw** compose apps; when the source is Git, commit changes and redeploy.
 
 ## Pairing
 
