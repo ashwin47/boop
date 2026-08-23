@@ -27,7 +27,7 @@ import (
 )
 
 // Version is the server version, overridden at build time via -ldflags.
-var Version = "0.1.0-dev"
+var Version = "1.0.0"
 
 // Server holds every dependency the handlers need.
 type Server struct {

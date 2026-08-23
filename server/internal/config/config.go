@@ -14,7 +14,10 @@ type Config struct {
 	BaseURL       string
 	DatabasePath  string
 	RetentionDays int
-	LogLevel      string
+	// RetentionDaysSet is true when BOOP_RETENTION_DAYS was given explicitly; the
+	// value then overrides whatever was saved from the web UI on every start.
+	RetentionDaysSet bool
+	LogLevel         string
 
 	// Optional admin login for the web UI and admin API. Both must be set to enable it.
 	AdminUser     string
@@ -62,7 +65,7 @@ func Load() (Config, error) {
 		Port:          8080,
 		BaseURL:       env("BOOP_BASE_URL", ""),
 		DatabasePath:  env("BOOP_DATABASE_PATH", "/data/boop.db"),
-		RetentionDays: 30,
+		RetentionDays: 90,
 		LogLevel:      env("BOOP_LOG_LEVEL", "info"),
 		AdminUser:     env("BOOP_ADMIN_USER", ""),
 		AdminPassword: env("BOOP_ADMIN_PASSWORD", ""),
@@ -88,6 +91,7 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("BOOP_RETENTION_DAYS must be a non-negative integer, got %q", v)
 		}
 		c.RetentionDays = d
+		c.RetentionDaysSet = true
 	}
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
 	if (c.AdminUser == "") != (c.AdminPassword == "") {

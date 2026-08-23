@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "How Boop works",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "ingest", "label": "Sending an event", "focus": ["apps", "api", "db"], "note": "Any app, script, or CI job POSTs a JSON event with its project API key." },
+      { "id": "push", "label": "Push to your phone", "focus": ["api", "apns", "ios"], "note": "The server signs an ES256 JWT and talks to APNs directly; the app then fetches the full event." },
+      { "id": "admin", "label": "Managing it", "focus": ["admin", "web", "ios"], "note": "The embedded web UI manages projects and devices and shows the pairing QR the phone scans." }
+    ]
+  },
+  "components": [
+    { "id": "admin", "type": "external", "label": "You", "sublabel": "browser", "pos": [40, 120], "size": [130, 60] },
+    { "id": "apps", "type": "external", "label": "Your apps", "sublabel": "scripts · CI · clients", "pos": [40, 300], "size": [130, 60] },
+    { "id": "web", "type": "frontend", "label": "Web UI", "sublabel": "Svelte · embedded", "pos": [320, 120], "size": [150, 60], "tag": "admin login", "brand": "svelte" },
+    { "id": "api", "type": "backend", "label": "Boop server", "sublabel": "Go net/http :8080", "pos": [320, 300], "size": [150, 60], "tag": "redaction · retention", "brand": "go" },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "/data/boop.db · WAL", "pos": [320, 480], "size": [150, 60], "brand": "sqlite" },
+    { "id": "apns", "type": "cloud", "label": "Apple APNs", "sublabel": "HTTP/2", "pos": [640, 480], "size": [150, 60] },
+    { "id": "ios", "type": "frontend", "label": "Boop iOS app", "sublabel": "your build · your bundle id", "pos": [920, 300], "size": [160, 60], "tag": "Keychain credential" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Your server · one Docker container", "wraps": ["web", "api", "db"] }
+  ],
+  "connections": [
+    { "id": "ingest", "from": "apps", "to": "api", "label": "POST event · project key", "variant": "emphasis", "labelDy": -24 },
+    { "id": "store", "from": "api", "to": "db", "label": "store", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "push", "from": "api", "to": "apns", "label": "push · ES256 JWT", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "deliver", "from": "apns", "to": "ios", "label": "notification", "variant": "emphasis", "fromSide": "right", "toSide": "bottom" },
+    { "id": "fetch", "from": "ios", "to": "api", "label": "GET event · device credential", "variant": "dashed", "fromSide": "left", "toSide": "right" },
+    { "id": "manage", "from": "admin", "to": "web", "label": "HTTPS · login" },
+    { "id": "pair", "from": "web", "to": "ios", "label": "pairing QR", "variant": "dashed", "fromSide": "right", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Send", "items": ["Any HTTP client can POST an event", "Only `title` is required; `data` is free-form JSON", "Sensitive keys are redacted before storage"] },
+    { "dot": "violet", "title": "Deliver", "items": ["Server pushes straight to APNs with your .p8 key", "Push carries only title, body, and the event id", "The app fetches full detail from your server"] },
+    { "dot": "emerald", "title": "Own", "items": ["One binary, one SQLite file, one container", "You hold the server, keys, data, and the iOS build", "No Boop-run infrastructure anywhere"] }
+  ]
+}

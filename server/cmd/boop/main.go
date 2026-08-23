@@ -51,7 +51,13 @@ func run() error {
 	st := settings.New(db)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := st.SetDefault(ctx, settings.KeyRetentionDays, strconv.Itoa(cfg.RetentionDays)); err != nil {
+	// Retention: an explicit BOOP_RETENTION_DAYS wins; otherwise the UI-saved value (default 90) is kept.
+	if cfg.RetentionDaysSet {
+		err = st.Set(ctx, settings.KeyRetentionDays, strconv.Itoa(cfg.RetentionDays))
+	} else {
+		err = st.SetDefault(ctx, settings.KeyRetentionDays, strconv.Itoa(cfg.RetentionDays))
+	}
+	if err != nil {
 		return err
 	}
 

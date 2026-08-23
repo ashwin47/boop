@@ -190,7 +190,7 @@
 
   {#if settings}
     <Card title="Retention">
-      <SettingRow label="Keep events for" hint="Older events are deleted automatically once an hour. Unlimited keeps everything.">
+      <SettingRow label="Keep events for" hint="Older events are deleted automatically once an hour. Unlimited keeps everything. If BOOP_RETENTION_DAYS is set in the environment it overrides this on restart.">
         <Select value={String(settings.retention_days)} options={retentionOptions.some((o) => o.value === String(settings!.retention_days)) ? retentionOptions : [...retentionOptions, { value: String(settings.retention_days), label: `${settings.retention_days} days` }]} onchange={(e) => setRetention((e.currentTarget as HTMLSelectElement).value)} style="width: 150px" />
       </SettingRow>
     </Card>

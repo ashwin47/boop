@@ -22,14 +22,23 @@ curl https://boop.example.com/api/v1/events \
   -d '{"title": "Backup complete", "level": "success"}'
 ```
 
+## Architecture
+
+<p align="center">
+  <img src="docs/architecture.png" width="900" alt="How Boop works: apps POST events to the Go server, which stores them in SQLite and pushes to APNs; the iOS app fetches full detail from the server; the web UI manages projects and shows the pairing QR." />
+</p>
+
+Your apps POST events with a project API key. The Go server redacts and stores them in SQLite, then pushes straight to Apple's APNs using your `.p8` key. The push carries only the title, body and event id; the iOS app fetches the full event from your server with its own device credential. The embedded web UI manages projects and devices and shows the pairing QR the phone scans. An interactive version lives in [`docs/architecture/index.html`](docs/architecture/index.html) (open it locally; the source is `boop.architecture.json`).
+
 ## What is in the box
 
-| Part | Status |
+| Part | Where |
 | --- | --- |
 | Go server (API, SQLite, APNs, embedded web UI) | `server/` |
 | Web UI (Svelte, built into the binary) | `server/web/` |
-| iOS app | not yet |
-| Elixir client and ErrorTracker integration | not yet |
+| iOS app (SwiftUI, iOS 26, you build and sign it) | `ios/` — see [ios/README.md](ios/README.md) |
+| Client libraries | none bundled; point your LLM at [integration-llms.md](integration-llms.md) to generate one for any language |
+| Native desktop client | planned |
 
 ## Quick start (Docker)
 
@@ -127,7 +136,7 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 | `BOOP_PORT` | `8080` | |
 | `BOOP_BASE_URL` | request origin | Public URL your phone can reach; used in the pairing QR |
 | `BOOP_DATABASE_PATH` | `/data/boop.db` | WAL mode, migrations applied on start |
-| `BOOP_RETENTION_DAYS` | `30` | Initial value; changeable in the UI. `0` = keep forever |
+| `BOOP_RETENTION_DAYS` | `90` | Days of history to keep; `0` = forever. When set it overrides the value saved in the web UI on every start; leave unset to manage it from Settings |
 | `BOOP_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `BOOP_ADMIN_USER` | | Web UI / admin API username; set together with the password |
 | `BOOP_ADMIN_PASSWORD` | | 8+ characters. Unset = no login |
@@ -145,7 +154,7 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 3. Note your Team id (top right of the portal).
 4. Put the `.p8` at `./secrets/apns.p8`, uncomment the secrets volume in `docker-compose.yml`, set `APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8`, and fill the other `APNS_*` values in `.env`.
 5. Restart: `docker compose up -d`. Settings should show APNs as configured.
-6. Build the iOS app with the same bundle id, install it on your phone, open Devices → Pair iPhone, and scan the QR.
+6. Build the iOS app (`open ios/Boop.xcodeproj`, set your team and the same bundle id — see [ios/README.md](ios/README.md)), install it on your phone, open Devices → Pair iPhone, and scan the QR.
 7. Settings → Send test notification.
 
 ## Deploying with Dokploy (or any compose host)
