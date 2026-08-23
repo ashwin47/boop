@@ -1,1 +1,14 @@
 prd.md
+node_modules/
+server/web/dist/
+server/internal/web/dist/*
+!server/internal/web/dist/.gitkeep
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+secrets/
+.DS_Store
+bin/
+Design System/

@@ -1,0 +1,18 @@
+services:
+  boop:
+    build:
+      context: ./server
+    image: ghcr.io/chrisgregori/boop:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # The container runs as uid 1000. On Linux hosts run `mkdir -p data && chown 1000:1000 data` once.
+      - "./data:/data"
+      # Mount your APNs .p8 key read-only. Comment this line out until you have one.
+      # - "./secrets/apns.p8:/run/secrets/apns.p8:ro"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BOOP_DATABASE_PATH: /data/boop.db

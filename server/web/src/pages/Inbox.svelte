@@ -1,0 +1,156 @@
+<script lang="ts">
+  import { api, LEVELS, type Event, type Project } from '../lib/api'
+  import { link } from '../lib/router.svelte'
+  import { relative, dayGroup } from '../lib/format'
+  import { LEVEL_LABEL } from '../lib/levels'
+  import Card from '../lib/ui/Card.svelte'
+  import Select from '../lib/ui/Select.svelte'
+  import Button from '../lib/ui/Button.svelte'
+  import LevelBadge from '../lib/ui/LevelBadge.svelte'
+  import Empty from '../lib/ui/Empty.svelte'
+  import Notice from '../lib/ui/Notice.svelte'
+
+  let events = $state<Event[]>([])
+  let projects = $state<Project[]>([])
+  let cursor = $state<string | undefined>()
+  let loading = $state(true)
+  let loadingMore = $state(false)
+  let error = $state('')
+  let project = $state('')
+  let level = $state('')
+  let now = $state(new Date())
+
+  async function load(reset = true) {
+    try {
+      error = ''
+      if (reset) loading = true
+      else loadingMore = true
+      const page = await api.events({ project, level, before: reset ? undefined : cursor, limit: 50 })
+      events = reset ? page.events : [...events, ...page.events]
+      cursor = page.next_cursor
+      now = new Date()
+    } catch (e: any) {
+      error = e.message
+    } finally {
+      loading = false
+      loadingMore = false
+    }
+  }
+
+  $effect(() => {
+    project
+    level
+    load(true)
+  })
+  $effect(() => {
+    api.projects().then((r) => (projects = r.projects)).catch(() => {})
+    const t = setInterval(() => load(true), 30_000)
+    const tick = setInterval(() => (now = new Date()), 15_000)
+    return () => {
+      clearInterval(t)
+      clearInterval(tick)
+    }
+  })
+
+  const groups = $derived.by(() => {
+    const out: { label: string; items: Event[] }[] = []
+    for (const e of events) {
+      const label = dayGroup(e.created_at, now)
+      const g = out[out.length - 1]
+      if (g && g.label === label) g.items.push(e)
+      else out.push({ label, items: [e] })
+    }
+    return out
+  })
+</script>
+
+<div class="stack">
+  <div class="toolbar">
+    <Select
+      bind:value={project}
+      options={[{ value: '', label: 'All projects' }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+      aria-label="Project"
+    />
+    <Select bind:value={level} options={[{ value: '', label: 'All levels' }, ...LEVELS.map((l) => ({ value: l, label: LEVEL_LABEL[l] }))]} aria-label="Level" />
+    <span class="spacer"></span>
+    <Button variant="secondary" size="sm" onclick={() => load(true)} disabled={loading}>Refresh</Button>
+  </div>
+
+  {#if error}
+    <Notice tone="bad">{error}</Notice>
+  {/if}
+
+  <Card flush>
+    {#if loading && events.length === 0}
+      <Empty title="Loading" />
+    {:else if events.length === 0}
+      <Empty title="No events yet">
+        {#if projects.length === 0}
+          <a href="/projects" onclick={link}>Create a project</a> to get an API key, then send your first boop.
+        {:else}
+          Send one with curl or a client, or use the test button in <a href="/settings" onclick={link}>settings</a>.
+        {/if}
+      </Empty>
+    {:else}
+      {#each groups as g (g.label)}
+        <div class="group">{g.label}</div>
+        {#each g.items as e (e.id)}
+          <a class="ev" href="/events/{e.id}" onclick={link}>
+            <div class="proj">
+              {#if e.project_icon}<span class="icon">{e.project_icon}</span>{/if}
+              <span>{e.project_name}</span>
+            </div>
+            <div class="main">
+              <div class="title">{e.title}</div>
+              {#if e.body}<div class="body">{e.body}</div>{/if}
+            </div>
+            <div class="lvl"><LevelBadge level={e.level} /></div>
+            <div class="time" title={e.created_at}>{relative(e.created_at, now)}</div>
+          </a>
+        {/each}
+      {/each}
+      {#if cursor}
+        <div class="more">
+          <Button variant="ghost" size="sm" onclick={() => load(false)} disabled={loadingMore}>{loadingMore ? 'Loading' : 'Load more'}</Button>
+        </div>
+      {/if}
+    {/if}
+  </Card>
+</div>
+
+<style>
+  .toolbar { display: flex; gap: var(--up-space-3); align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .group {
+    font: var(--up-type-caption);
+    color: var(--up-text-faint);
+    padding: 10px var(--up-space-4) 6px;
+    text-transform: none;
+  }
+  .group + .ev { border-top: none; }
+  .ev {
+    display: grid;
+    grid-template-columns: 120px 1fr auto 64px;
+    gap: var(--up-space-4);
+    align-items: center;
+    padding: 12px var(--up-space-4);
+    border-radius: var(--up-radius-control);
+    color: var(--up-ink);
+    transition: background 120ms ease-out;
+  }
+  .ev:hover { background: var(--up-bg-hover); color: var(--up-ink); }
+  .proj { font: var(--up-type-meta); color: var(--up-text-secondary); display: flex; gap: 6px; align-items: center; min-width: 0; }
+  .proj span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main { min-width: 0; }
+  .title { font: var(--up-type-row-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .body { font: var(--up-type-meta); color: var(--up-text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .time { font: var(--up-type-caption); color: var(--up-text-muted); text-align: right; }
+  .more { display: flex; justify-content: center; padding: 10px 0 4px; }
+  @media (max-width: 600px) {
+    .ev { grid-template-columns: 1fr auto; grid-template-rows: auto auto; }
+    .proj { grid-column: 1; grid-row: 1; }
+    .time { grid-column: 2; grid-row: 1; }
+    .main { grid-column: 1 / span 2; grid-row: 2; }
+    .lvl { display: none; }
+  }
+</style>
