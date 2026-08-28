@@ -34,6 +34,20 @@ export interface Event {
   data: Record<string, unknown>
   occurred_at: string
   created_at: string
+  silenced: boolean
+  silence_id?: string
+}
+
+export type SilenceField = 'fingerprint' | 'title' | 'source'
+
+export interface Silence {
+  id: string
+  project_id?: string
+  project_name?: string
+  field: SilenceField
+  value: string
+  note: string
+  created_at: string
 }
 
 export interface EventPage {
@@ -151,7 +165,7 @@ export const api = {
   settings: () => request<Settings>('GET', '/api/v1/settings'),
   updateSettings: (patch: Partial<Settings>) => request<Settings>('PATCH', '/api/v1/settings', patch),
 
-  events: (params: { project?: string; level?: string; source?: string; before?: string; limit?: number } = {}) => {
+  events: (params: { project?: string; level?: string; source?: string; before?: string; limit?: number; silenced?: string } = {}) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') q.set(k, String(v))
     const qs = q.toString()
@@ -174,6 +188,12 @@ export const api = {
   createPairing: () => request<PairingToken>('POST', '/api/v1/pairing'),
   pendingPairings: () => request<{ pairing_tokens: PairingToken[] }>('GET', '/api/v1/pairing'),
   revokePairing: (id: string) => request<void>('DELETE', `/api/v1/pairing/${id}`),
+
+  silences: () => request<{ silences: Silence[]; fields: SilenceField[]; silenced_events: number }>('GET', '/api/v1/silences'),
+  silence: (id: string) => request<Silence>('GET', `/api/v1/silences/${id}`),
+  unsilence: (eventId: string) => request<{ event: Event; deliveries: Delivery[] }>('POST', `/api/v1/events/${encodeURIComponent(eventId)}/unsilence`),
+  createSilence: (input: { field: SilenceField; value: string; project_id?: string; note?: string }) => request<Silence>('POST', '/api/v1/silences', input),
+  deleteSilence: (id: string) => request<void>('DELETE', `/api/v1/silences/${id}`),
 
   test: (project_id?: string) =>
     request<{ event: Event; deliveries: Delivery[]; apns_configured: boolean }>('POST', '/api/v1/test', project_id ? { project_id } : {}),

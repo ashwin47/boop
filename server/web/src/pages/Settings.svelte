@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Status, type Settings, type Project, type Delivery } from '../lib/api'
+  import { api, type Status, type Settings, type Project, type Delivery, type Silence, type SilenceField } from '../lib/api'
   import { relative, duration, retentionLabel, compact } from '../lib/format'
   import Card from '../lib/ui/Card.svelte'
   import Button from '../lib/ui/Button.svelte'
@@ -12,6 +12,7 @@
   import Metric from '../lib/ui/Metric.svelte'
   import { panel, pop, reorder, soft } from '../lib/motion'
   import Skeleton from '../lib/ui/Skeleton.svelte'
+  import { link } from '../lib/router.svelte'
 
   let status = $state<Status | null>(null)
   let settings = $state<Settings | null>(null)
@@ -21,11 +22,49 @@
   let testResult = $state<{ deliveries: Delivery[]; apns_configured: boolean } | null>(null)
   let newKey = $state('')
   let testProject = $state('')
+  let silences = $state<Silence[]>([])
+  let silencedEvents = $state(0)
+  let silField = $state<SilenceField>('title')
+  let silValue = $state('')
+  let silProject = $state('')
+  let silNote = $state('')
+
+  async function loadSilences() {
+    try {
+      const r = await api.silences()
+      silences = r.silences
+      silencedEvents = r.silenced_events
+    } catch (e: any) {
+      error = e.message
+    }
+  }
+
+  async function addSilence() {
+    if (!silValue.trim()) return
+    try {
+      await api.createSilence({ field: silField, value: silValue.trim(), project_id: silProject || undefined, note: silNote.trim() || undefined })
+      silValue = ''
+      silNote = ''
+      await loadSilences()
+    } catch (e: any) {
+      error = e.message
+    }
+  }
+
+  async function removeSilence(s: Silence) {
+    try {
+      await api.deleteSilence(s.id)
+      silences = silences.filter((x) => x.id !== s.id)
+    } catch (e: any) {
+      error = e.message
+    }
+  }
 
   async function load() {
     try {
       ;[status, settings] = await Promise.all([api.status(), api.settings()])
       projects = (await api.projects()).projects
+      await loadSilences()
     } catch (e: any) {
       error = e.message
     }
@@ -195,6 +234,40 @@
       </SettingRow>
     </Card>
 
+    <Card title="Silences">
+      <p class="secondary lead">Events matching a rule are still stored and shown, but never pushed to a phone. Add rules from an event's page or here. Fingerprint and source match exactly; title ignores case.</p>
+      <p class="lead" style="margin-top: 8px"><a href="/?silenced=true" onclick={link}>{silencedEvents} silenced event{silencedEvents === 1 ? '' : 's'}</a> · open one to unsilence it or push it now.</p>
+      {#if silences.length === 0}
+        <p class="muted" style="margin-top: 12px">No silences.</p>
+      {:else}
+        <div class="sils" style="margin-top: 12px">
+          {#each silences as s (s.id)}
+            <div class="sil" animate:reorder out:soft>
+              <div class="sil-main">
+                <span class="pill custom">{s.field}</span>
+                <span class="mono sv">{s.value}</span>
+                <span class="muted caption">· {s.project_name || 'every project'}{s.note ? ` · ${s.note}` : ''} · {relative(s.created_at)}</span>
+              </div>
+              <Button variant="danger" size="sm" onclick={() => removeSilence(s)}>Remove</Button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      <form
+        class="sil-form"
+        onsubmit={(e) => {
+          e.preventDefault()
+          addSilence()
+        }}
+      >
+        <Select bind:value={silField} options={[{ value: 'title', label: 'Title' }, { value: 'fingerprint', label: 'Fingerprint' }, { value: 'source', label: 'Source' }]} style="width: 130px" aria-label="Field" />
+        <Input bind:value={silValue} placeholder="Value to match" aria-label="Value" mono />
+        <Select bind:value={silProject} options={[{ value: '', label: 'Every project' }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} style="width: 160px" aria-label="Project" />
+        <Input bind:value={silNote} placeholder="Note (optional)" aria-label="Note" style="width: 180px" />
+        <Button variant="secondary" type="submit" disabled={!silValue.trim()}>Add</Button>
+      </form>
+    </Card>
+
     <Card title="Redaction">
       <p class="secondary lead">Values under these keys are replaced with [REDACTED] anywhere in event data before it is stored. Matching ignores case and treats - and _ the same.</p>
       <div class="keys" style="margin-top: 12px">
@@ -228,6 +301,13 @@
   .k { font: var(--up-type-caption); color: var(--up-text-muted); }
   .lead { font: var(--up-type-meta); line-height: 1.6; }
   .keys { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sils { display: flex; flex-direction: column; gap: 6px; }
+  .sil { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: var(--up-radius-control); transition: background 120ms ease-out; }
+  .sil:hover { background: var(--up-bg-hover); }
+  .sil-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font: var(--up-type-meta); }
+  .sv { word-break: break-all; }
+  .sil-form { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+  .sil-form :global(input:nth-of-type(1)) { flex: 1; min-width: 160px; }
   .pill { display: inline-flex; align-items: center; gap: 6px; font: var(--up-type-code); padding: 4px 10px; border-radius: var(--up-radius-pill); background: var(--up-bg-hover); box-shadow: var(--up-ring-inset); }
   .pill.custom { background: var(--up-accent-tint); color: var(--up-accent-hover); }
   .pill button { background: none; border: none; cursor: pointer; color: inherit; font-size: 14px; line-height: 1; padding: 0; }

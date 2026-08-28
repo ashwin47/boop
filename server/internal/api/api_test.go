@@ -24,6 +24,7 @@ import (
 	"github.com/chrisgreg/boop/server/internal/pairing"
 	"github.com/chrisgreg/boop/server/internal/projects"
 	"github.com/chrisgreg/boop/server/internal/settings"
+	"github.com/chrisgreg/boop/server/internal/silences"
 )
 
 // fakeSender records notifications instead of talking to APNs.
@@ -71,6 +72,7 @@ func newEnv(t *testing.T) *env {
 		Devices:    dev,
 		Pairing:    pairing.New(db, dev),
 		Events:     events.New(db),
+		Silences:   silences.New(db),
 		Dispatcher: delivery.New(db, dev, sender, log),
 		Admin:      auth.NewAdmin("", ""),
 		StartedAt:  time.Now(),
@@ -818,5 +820,154 @@ func TestAdminAuth(t *testing.T) {
 	}
 	if r := withCookie("GET", "/api/v1/projects", nil); r.status != 401 {
 		t.Errorf("session should be revoked: %d", r.status)
+	}
+}
+
+func TestSilences(t *testing.T) {
+	e := newEnv(t)
+	pid, key := e.createProject("Uini")
+	_, key2 := e.createProject("Infra")
+	_, c := e.pairDevice("phone")
+	e.do("POST", "/api/v1/devices", c, map[string]string{"device_token": "t1"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.server.Dispatcher.Start(ctx)
+
+	// Validation.
+	if r := e.do("POST", "/api/v1/silences", "", map[string]string{"field": "regex", "value": "x"}); r.status != 422 {
+		t.Errorf("bad field: %d %s", r.status, r.raw)
+	}
+	if r := e.do("POST", "/api/v1/silences", "", map[string]string{"field": "title", "value": "  "}); r.status != 422 {
+		t.Errorf("empty value: %d", r.status)
+	}
+	if r := e.do("POST", "/api/v1/silences", "", map[string]string{"field": "title", "value": "x", "project_id": "prj_nope"}); r.status != 422 {
+		t.Errorf("unknown project: %d %s", r.status, r.raw)
+	}
+
+	// A project-scoped fingerprint rule and a global, case-insensitive title rule.
+	r := e.do("POST", "/api/v1/silences", "", map[string]string{"field": "fingerprint", "value": "noisy-1", "project_id": pid, "note": "known flake"})
+	if r.status != 201 || r.body["project_name"] != "Uini" || r.body["note"] != "known flake" {
+		t.Fatalf("create: %d %s", r.status, r.raw)
+	}
+	fpRule := r.body["id"].(string)
+	r = e.do("POST", "/api/v1/silences", "", map[string]string{"field": "title", "value": "Disk Usage High"})
+	if r.status != 201 {
+		t.Fatalf("create title rule: %d %s", r.status, r.raw)
+	}
+	titleRule := r.body["id"].(string)
+	if r := e.do("GET", "/api/v1/silences", "", nil); len(r.body["silences"].([]any)) != 2 || len(r.body["fields"].([]any)) != 3 {
+		t.Errorf("list: %s", r.raw)
+	}
+
+	sent := func() int { return len(e.sender.sent) }
+	wait := func(n int) {
+		deadline := time.Now().Add(2 * time.Second)
+		for sent() < n && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	post := func(k string, body map[string]string) map[string]any {
+		r := e.do("POST", "/api/v1/events", k, body)
+		if r.status != 201 {
+			t.Fatalf("post: %d %s", r.status, r.raw)
+		}
+		return e.do("GET", "/api/v1/events/"+r.body["id"].(string), "", nil).body
+	}
+
+	// Silenced by fingerprint in its project: stored, flagged, not pushed.
+	ev := post(key, map[string]string{"title": "Flaky test", "fingerprint": "noisy-1"})
+	time.Sleep(100 * time.Millisecond)
+	if ev["silenced"] != true || ev["silence_id"] != fpRule || sent() != 0 {
+		t.Errorf("fingerprint silence: silenced=%v sent=%d", ev["silenced"], sent())
+	}
+	// Same fingerprint in another project is not covered by the scoped rule.
+	ev = post(key2, map[string]string{"title": "Flaky test", "fingerprint": "noisy-1"})
+	wait(1)
+	if ev["silenced"] != false || sent() != 1 {
+		t.Errorf("scoped rule leaked: silenced=%v sent=%d", ev["silenced"], sent())
+	}
+	// Global title rule, case-insensitive, any project.
+	ev = post(key2, map[string]string{"title": "disk usage HIGH", "level": "warning"})
+	time.Sleep(100 * time.Millisecond)
+	if ev["silenced"] != true || ev["silence_id"] != titleRule || sent() != 1 {
+		t.Errorf("title silence: %v sent=%d", ev, sent())
+	}
+	// Unrelated event still pushes.
+	post(key, map[string]string{"title": "Deploy complete"})
+	wait(2)
+	if sent() != 2 {
+		t.Errorf("unsilenced event should push: sent=%d", sent())
+	}
+	// The inbox exposes the flag.
+	r = e.do("GET", "/api/v1/events?limit=10", "", nil)
+	silencedCount := 0
+	for _, x := range r.body["events"].([]any) {
+		if x.(map[string]any)["silenced"] == true {
+			silencedCount++
+		}
+	}
+	if silencedCount != 2 {
+		t.Errorf("silenced in list = %d", silencedCount)
+	}
+	// Test notifications honour silences too.
+	r = e.do("POST", "/api/v1/silences", "", map[string]string{"field": "title", "value": "Test boop"})
+	testRule := r.body["id"].(string)
+	r = e.do("POST", "/api/v1/test", "", nil)
+	if r.body["event"].(map[string]any)["silenced"] != true || len(r.body["deliveries"].([]any)) != 0 {
+		t.Errorf("test event should be silenced: %s", r.raw)
+	}
+	// Delete: rule gone, later events push again; history keeps its flag.
+	if r := e.do("DELETE", "/api/v1/silences/"+testRule, "", nil); r.status != 204 {
+		t.Errorf("delete: %d", r.status)
+	}
+	if r := e.do("DELETE", "/api/v1/silences/"+testRule, "", nil); r.status != 404 {
+		t.Errorf("double delete: %d", r.status)
+	}
+	e.do("DELETE", "/api/v1/silences/"+fpRule, "", nil)
+	before := sent()
+	post(key, map[string]string{"title": "Flaky test", "fingerprint": "noisy-1"})
+	wait(before + 1)
+	if sent() != before+1 {
+		t.Errorf("after deleting the rule the event should push: %d", sent()-before)
+	}
+	if ev := e.do("GET", "/api/v1/events/"+ev["id"].(string), "", nil).body; ev["silenced"] != true {
+		t.Errorf("history should keep the silenced flag")
+	}
+	// Device credentials cannot manage silences.
+	if r := e.do("GET", "/api/v1/silences", c, nil); r.status != 403 {
+		t.Errorf("device on silences: %d", r.status)
+	}
+
+	// Listing silenced events only, and unsilencing one pushes it now.
+	r = e.do("GET", "/api/v1/events?silenced=true", "", nil)
+	silencedOnly := r.body["events"].([]any)
+	if len(silencedOnly) != 3 {
+		t.Fatalf("silenced=true list: %d %s", len(silencedOnly), r.raw)
+	}
+	for _, x := range silencedOnly {
+		if x.(map[string]any)["silenced"] != true {
+			t.Errorf("non-silenced event in silenced list")
+		}
+	}
+	if r := e.do("GET", "/api/v1/events?silenced=false", "", nil); len(r.body["events"].([]any)) != 3 {
+		t.Errorf("silenced=false list: %s", r.raw)
+	}
+	if r := e.do("GET", "/api/v1/silences", "", nil); r.body["silenced_events"] != float64(3) {
+		t.Errorf("silenced_events count: %s", r.raw)
+	}
+	target := silencedOnly[0].(map[string]any)["id"].(string)
+	if r := e.do("GET", "/api/v1/silences/"+titleRule, "", nil); r.status != 200 || r.body["field"] != "title" {
+		t.Errorf("get silence: %d %s", r.status, r.raw)
+	}
+	before = sent()
+	r = e.do("POST", "/api/v1/events/"+target+"/unsilence", "", nil)
+	if r.status != 200 || r.body["event"].(map[string]any)["silenced"] != false || len(r.body["deliveries"].([]any)) != 1 || sent() != before+1 {
+		t.Errorf("unsilence: %d %s sent=%d", r.status, r.raw, sent()-before)
+	}
+	if r := e.do("POST", "/api/v1/events/"+target+"/unsilence", "", nil); r.status != 422 {
+		t.Errorf("unsilence twice: %d", r.status)
+	}
+	if r := e.do("GET", "/api/v1/events?silenced=true", "", nil); len(r.body["events"].([]any)) != 2 {
+		t.Errorf("after unsilence: %s", r.raw)
 	}
 }

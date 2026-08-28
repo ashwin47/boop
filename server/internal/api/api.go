@@ -24,10 +24,11 @@ import (
 	"github.com/chrisgreg/boop/server/internal/pairing"
 	"github.com/chrisgreg/boop/server/internal/projects"
 	"github.com/chrisgreg/boop/server/internal/settings"
+	"github.com/chrisgreg/boop/server/internal/silences"
 )
 
 // Version is the server version, overridden at build time via -ldflags.
-var Version = "1.0.0"
+var Version = "1.1.0"
 
 // Server holds every dependency the handlers need.
 type Server struct {
@@ -39,6 +40,7 @@ type Server struct {
 	Devices    *devices.Store
 	Pairing    *pairing.Store
 	Events     *events.Store
+	Silences   *silences.Store
 	Dispatcher *delivery.Dispatcher
 	APNS       *apns.Client // nil when not configured
 	APNSError  string       // why APNS is nil
@@ -85,6 +87,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/v1/projects/{id}", s.adminAuth(s.updateProject))
 	mux.Handle("DELETE /api/v1/projects/{id}", s.adminAuth(s.deleteProject))
 	mux.Handle("POST /api/v1/projects/{id}/rotate-key", s.adminAuth(s.rotateProjectKey))
+	mux.Handle("POST /api/v1/events/{id}/unsilence", s.adminAuth(s.unsilenceEvent))
+	mux.Handle("GET /api/v1/silences/{id}", s.adminAuth(s.getSilence))
+	mux.Handle("GET /api/v1/silences", s.adminAuth(s.listSilences))
+	mux.Handle("POST /api/v1/silences", s.adminAuth(s.createSilence))
+	mux.Handle("DELETE /api/v1/silences/{id}", s.adminAuth(s.deleteSilence))
 	mux.Handle("GET /api/v1/status", s.adminAuth(s.status))
 	mux.Handle("GET /api/v1/settings", s.adminAuth(s.getSettings))
 	mux.Handle("PATCH /api/v1/settings", s.adminAuth(s.updateSettings))
@@ -306,9 +313,9 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // fail maps domain errors to HTTP responses.
 func (s *Server) fail(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, projects.ErrNotFound), errors.Is(err, events.ErrNotFound), errors.Is(err, devices.ErrNotFound), errors.Is(err, pairing.ErrNotFound):
+	case errors.Is(err, projects.ErrNotFound), errors.Is(err, events.ErrNotFound), errors.Is(err, devices.ErrNotFound), errors.Is(err, pairing.ErrNotFound), errors.Is(err, silences.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
-	case errors.Is(err, projects.ErrInvalid), errors.Is(err, events.ErrInvalid), errors.Is(err, devices.ErrInvalid):
+	case errors.Is(err, projects.ErrInvalid), errors.Is(err, events.ErrInvalid), errors.Is(err, devices.ErrInvalid), errors.Is(err, silences.ErrInvalid):
 		writeError(w, http.StatusUnprocessableEntity, "invalid", err.Error())
 	case errors.Is(err, pairing.ErrInvalidToken):
 		writeError(w, http.StatusUnauthorized, "invalid_pairing_token", err.Error())
@@ -523,7 +530,9 @@ func (s *Server) createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Info("event.created", "event_id", e.ID, "project_id", p.ID, "event_level", e.Level)
-	s.Dispatcher.Enqueue(e, p)
+	if silenced := s.applySilence(r.Context(), &e); !silenced {
+		s.Dispatcher.Enqueue(e, p)
+	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": e.ID, "created_at": e.CreatedAt})
 }
 
@@ -533,6 +542,10 @@ func (s *Server) listEvents(w http.ResponseWriter, r *http.Request) {
 	if f.Level != "" && !levels.Valid(f.Level) {
 		writeError(w, http.StatusUnprocessableEntity, "invalid", "level must be one of "+strings.Join(levels.All, ", "))
 		return
+	}
+	if v := q.Get("silenced"); v != "" {
+		b := v == "true" || v == "1"
+		f.Silenced = &b
 	}
 	if l := q.Get("limit"); l != "" {
 		n, err := strconv.Atoi(l)
@@ -570,6 +583,102 @@ func (s *Server) eventDeliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": d})
+}
+
+// applySilence marks e as silenced when a rule matches and reports whether it did.
+func (s *Server) applySilence(ctx context.Context, e *events.Event) bool {
+	rule, err := s.Silences.Match(ctx, e.ProjectID, e.Fingerprint, e.Title, e.Source)
+	if err != nil {
+		s.Log.Error("silence.match_failed", "error", err.Error())
+		return false
+	}
+	if rule == nil {
+		return false
+	}
+	if err := s.Events.SetSilence(ctx, e.ID, rule.ID); err != nil {
+		s.Log.Error("silence.record_failed", "error", err.Error())
+	}
+	e.SilenceID, e.Silenced = rule.ID, true
+	s.Log.Info("event.silenced", "event_id", e.ID, "silence_id", rule.ID)
+	return true
+}
+
+// ---- silences ----
+
+// unsilenceEvent clears the flag and pushes the event now.
+func (s *Server) unsilenceEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	e, err := s.Events.Get(ctx, r.PathValue("id"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if !e.Silenced {
+		writeError(w, http.StatusUnprocessableEntity, "not_silenced", "this event was not silenced")
+		return
+	}
+	p, err := s.Projects.Get(ctx, e.ProjectID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if err := s.Events.ClearSilence(ctx, e.ID); err != nil {
+		s.fail(w, err)
+		return
+	}
+	e.SilenceID, e.Silenced = "", false
+	dl := s.Dispatcher.Deliver(ctx, e, p)
+	if dl == nil {
+		dl = []delivery.Delivery{}
+	}
+	s.Log.Info("event.unsilenced", "event_id", e.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"event": e, "deliveries": dl})
+}
+
+func (s *Server) getSilence(w http.ResponseWriter, r *http.Request) {
+	sil, err := s.Silences.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sil)
+}
+
+func (s *Server) listSilences(w http.ResponseWriter, r *http.Request) {
+	list, err := s.Silences.List(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	n, err := s.Events.CountSilenced(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"silences": list, "fields": silences.Fields, "silenced_events": n})
+}
+
+func (s *Server) createSilence(w http.ResponseWriter, r *http.Request) {
+	var in silences.Input
+	if !readJSON(w, r, &in) {
+		return
+	}
+	sil, err := s.Silences.Create(r.Context(), in)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.Log.Info("silence.created", "silence_id", sil.ID, "field", sil.Field)
+	writeJSON(w, http.StatusCreated, sil)
+}
+
+func (s *Server) deleteSilence(w http.ResponseWriter, r *http.Request) {
+	if err := s.Silences.Delete(r.Context(), r.PathValue("id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.Log.Info("silence.deleted", "silence_id", r.PathValue("id"))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---- projects ----
@@ -788,7 +897,10 @@ func (s *Server) testNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Info("event.created", "event_id", e.ID, "project_id", p.ID, "event_level", e.Level, "test", true)
-	dl := s.Dispatcher.Deliver(ctx, e, p)
+	var dl []delivery.Delivery
+	if !s.applySilence(ctx, &e) {
+		dl = s.Dispatcher.Deliver(ctx, e, p)
+	}
 	if dl == nil {
 		dl = []delivery.Delivery{}
 	}

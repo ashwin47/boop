@@ -165,7 +165,7 @@ All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message"
 | --- | --- | --- | --- |
 | GET | `/health` | none | `{"status":"ok"}` |
 | POST | `/api/v1/events` | project key | Create event, returns `{id, created_at}` |
-| GET | `/api/v1/events?project=&level=&source=&before=&limit=` | device or none | List, newest first; `next_cursor` feeds `before` |
+| GET | `/api/v1/events?project=&level=&source=&silenced=&before=&limit=` | device or none | List, newest first; `next_cursor` feeds `before`; `silenced=true\|false` filters |
 | GET | `/api/v1/events/:id` | device or none | Full event |
 | GET | `/api/v1/events/:id/deliveries` | device or none | Push attempts for an event |
 | GET/POST | `/api/v1/projects` | admin | List / create (returns `api_key` once) |
@@ -179,6 +179,10 @@ All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message"
 | GET | `/api/v1/devices` | admin | List paired devices |
 | GET | `/api/v1/status` | admin | Health, APNs state, counts, last push |
 | GET/PATCH | `/api/v1/settings` | admin | `retention_days`, `redact_keys`, `setup_completed` |
+| GET/POST | `/api/v1/silences` | admin | Rules that stop matching events from being pushed: `{field: fingerprint\|title\|source, value, project_id?, note?}` |
+| GET | `/api/v1/silences/:id` | admin | One rule |
+| DELETE | `/api/v1/silences/:id` | admin | Remove a rule (already-silenced events keep their flag) |
+| POST | `/api/v1/events/:id/unsilence` | admin | Clear the flag and push the event now |
 | POST | `/api/v1/test` | admin | Create a test event and push it |
 
 Credentials: project keys (`boop_proj_...`) can only create events; device credentials (`boop_dev_...`) can only read events and manage their own device. Only SHA-256 hashes are stored.
@@ -235,6 +239,10 @@ The web UI generates a one-time token (10 minutes, single use, revocable) and sh
 ```
 
 The app posts the token to `/api/v1/pairing/exchange`, stores the returned device credential, registers for APNs, and posts its token to `/api/v1/devices`. Registering the same APNs token twice updates the existing device instead of creating a duplicate.
+
+## Silences
+
+Some events you want stored but not on your phone: a known flaky job, a noisy warning. On any event's page click **Silence events like this** and pick what to match — its fingerprint, its title, or its source — for that project or every project. Matching events still arrive in the inbox (marked *silenced*) and in the iOS app, but no push is sent. Filter the inbox to **Silenced only** to review them; a silenced event's page shows the rule that caught it with **Remove rule** and **Unsilence and push now**. Manage all rules under **Settings → Silences**. Fingerprint and source match exactly; title ignores case.
 
 ## Redaction
 

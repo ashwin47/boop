@@ -15,13 +15,15 @@ final class EventTests: XCTestCase {
         "custom": {"deep": [1, 2, {"k": "v"}]}
       },
       "occurred_at": "2026-08-28T12:51:44Z",
-      "created_at": "2026-08-28T14:10:46.627043000Z"
+      "created_at": "2026-08-28T14:10:46.627043000Z",
+      "silenced": true
     }
     """
 
     func testDecodesRichEventAndSections() throws {
         let e = try APIClient.decoder.decode(Event.self, from: Data(rich.utf8))
         XCTAssertEqual(e.level, .error)
+        XCTAssertTrue(e.silenced)
         XCTAssertEqual(e.externalID, "4f9d")
         XCTAssertEqual(Calendar(identifier: .gregorian).component(.year, from: e.createdAt), 2026)
         // Nanosecond timestamps are accepted and keep millisecond precision.
@@ -45,6 +47,7 @@ final class EventTests: XCTestCase {
         let json = #"{"id":"evt_2","project_id":"prj_1","title":"Hi","level":"bogus","occurred_at":"2026-08-28T12:51:44Z","created_at":"2026-08-28T12:51:44Z"}"#
         let e = try APIClient.decoder.decode(Event.self, from: Data(json.utf8))
         XCTAssertEqual(e.level, .info)
+        XCTAssertFalse(e.silenced)
         XCTAssertEqual(e.body, "")
         XCTAssertEqual(e.data, .object([:]))
         XCTAssertTrue(e.sections.isEmpty)

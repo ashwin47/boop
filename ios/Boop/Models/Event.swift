@@ -16,6 +16,8 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
     let data: JSONValue
     let occurredAt: Date
     let createdAt: Date
+    /// True when a silence rule stopped this event from being pushed.
+    let silenced: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,6 +29,7 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         case source, type, level, title, body, fingerprint, data
         case occurredAt = "occurred_at"
         case createdAt = "created_at"
+        case silenced
     }
 
     init(from decoder: any Decoder) throws {
@@ -46,11 +49,12 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         data = try c.decodeIfPresent(JSONValue.self, forKey: .data) ?? .object([:])
         occurredAt = try c.decode(Date.self, forKey: .occurredAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
+        silenced = try c.decodeIfPresent(Bool.self, forKey: .silenced) ?? false
     }
 
     init(id: String, projectID: String, projectName: String, projectIcon: String = "", source: String = "", type: String = "",
          level: Level, title: String, body: String = "", fingerprint: String = "", data: JSONValue = .object([:]),
-         occurredAt: Date, createdAt: Date) {
+         occurredAt: Date, createdAt: Date, silenced: Bool = false) {
         self.id = id
         self.externalID = nil
         self.projectID = projectID
@@ -66,6 +70,7 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         self.data = data
         self.occurredAt = occurredAt
         self.createdAt = createdAt
+        self.silenced = silenced
     }
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

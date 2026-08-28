@@ -21,6 +21,7 @@
   let error = $state('')
   let project = $state('')
   let level = $state('')
+  let silenced = $state(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('silenced') ?? '' : '')
   let now = $state(new Date())
 
   async function load(reset = true) {
@@ -28,7 +29,7 @@
       error = ''
       if (reset) loading = true
       else loadingMore = true
-      const page = await api.events({ project, level, before: reset ? undefined : cursor, limit: 50 })
+      const page = await api.events({ project, level, silenced, before: reset ? undefined : cursor, limit: 50 })
       events = reset ? page.events : [...events, ...page.events]
       cursor = page.next_cursor
       now = new Date()
@@ -43,6 +44,7 @@
   $effect(() => {
     project
     level
+    silenced
     load(true)
   })
   $effect(() => {
@@ -75,6 +77,7 @@
       aria-label="Project"
     />
     <Select bind:value={level} options={[{ value: '', label: 'All levels' }, ...LEVELS.map((l) => ({ value: l, label: LEVEL_LABEL[l] }))]} aria-label="Level" />
+    <Select bind:value={silenced} options={[{ value: '', label: 'Pushed and silenced' }, { value: 'true', label: 'Silenced only' }, { value: 'false', label: 'Pushed only' }]} aria-label="Silenced" />
     <span class="spacer"></span>
     <Button variant="secondary" size="sm" onclick={() => load(true)} disabled={loading}>Refresh</Button>
   </div>
@@ -88,7 +91,7 @@
       <div class="group">&nbsp;</div>
       <Skeleton rows={6} />
     {:else if events.length === 0}
-      <Empty title="No events yet">
+      <Empty title={silenced === 'true' ? 'No silenced events' : 'No events yet'}>
         {#if projects.length === 0}
           <a href="/projects" onclick={link}>Create a project</a> to get an API key, then send your first boop.
         {:else}
@@ -108,7 +111,10 @@
               <div class="title">{e.title}</div>
               {#if e.body}<div class="body">{e.body}</div>{/if}
             </div>
-            <div class="lvl"><LevelBadge level={e.level} /></div>
+            <div class="lvl">
+              <LevelBadge level={e.level} />
+              {#if e.silenced}<span class="silenced caption">silenced</span>{/if}
+            </div>
             <div class="time" title={e.created_at}>{relative(e.created_at, now)}</div>
           </a>
         {/each}
@@ -149,6 +155,8 @@
   .title { font: var(--up-type-row-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .body { font: var(--up-type-meta); color: var(--up-text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .time { font: var(--up-type-caption); color: var(--up-text-muted); text-align: right; }
+  .lvl { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .silenced { color: var(--up-text-inactive); }
   .more { display: flex; justify-content: center; padding: 10px 0 4px; }
   @media (max-width: 600px) {
     .ev { grid-template-columns: 1fr auto; grid-template-rows: auto auto; }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Event, type Delivery } from '../lib/api'
+  import { api, type Event, type Delivery, type Silence } from '../lib/api'
   import { link } from '../lib/router.svelte'
   import { fullDate, relative } from '../lib/format'
   import Card from '../lib/ui/Card.svelte'
@@ -10,7 +10,8 @@
   import Empty from '../lib/ui/Empty.svelte'
   import StatusDot from '../lib/ui/StatusDot.svelte'
   import ProjectIcon from '../lib/ui/ProjectIcon.svelte'
-  import { panel } from '../lib/motion'
+  import { panel, pop } from '../lib/motion'
+  import Button from '../lib/ui/Button.svelte'
   import Skeleton from '../lib/ui/Skeleton.svelte'
 
   let { id }: { id: string } = $props()
@@ -18,11 +19,70 @@
   let deliveries = $state<Delivery[]>([])
   let error = $state('')
   let showRaw = $state(false)
+  let silenceOpen = $state(false)
+  let silenceDone = $state<string | null>(null)
+  let silenceBusy = $state(false)
+  let rule = $state<Silence | null>(null)
+
+  async function loadRule(e: Event) {
+    rule = null
+    if (e.silence_id) rule = await api.silence(e.silence_id).catch(() => null)
+  }
+
+  async function removeRule() {
+    if (!rule) return
+    silenceBusy = true
+    try {
+      await api.deleteSilence(rule.id)
+      silenceDone = `Removed the ${rule.field} rule. Future matches will be pushed again; this event stays marked as silenced.`
+      rule = null
+    } catch (e: any) {
+      error = e.message
+    } finally {
+      silenceBusy = false
+    }
+  }
+
+  async function unsilence() {
+    if (!event) return
+    silenceBusy = true
+    try {
+      const r = await api.unsilence(event.id)
+      event = r.event
+      deliveries = r.deliveries
+      silenceDone = r.deliveries.length ? `Pushed to ${r.deliveries.length} device${r.deliveries.length === 1 ? '' : 's'}.` : 'Unsilenced. No paired phones with push registered, so nothing was sent.'
+    } catch (e: any) {
+      error = e.message
+    } finally {
+      silenceBusy = false
+    }
+  }
+
+  async function silence(field: 'fingerprint' | 'title' | 'source', scoped: boolean) {
+    if (!event) return
+    silenceBusy = true
+    try {
+      const value = field === 'fingerprint' ? event.fingerprint : field === 'title' ? event.title : event.source
+      const s = await api.createSilence({ field, value, project_id: scoped ? event.project_id : undefined, note: `From event ${event.id}` })
+      silenceDone = `Silenced ${field} "${s.value}"${scoped ? ` in ${event.project_name}` : ' in every project'}. Future matches are stored but not pushed.`
+      silenceOpen = false
+    } catch (e: any) {
+      error = e.message
+    } finally {
+      silenceBusy = false
+    }
+  }
 
   $effect(() => {
     event = null
     error = ''
-    api.event(id).then((e) => (event = e)).catch((e) => (error = e.message))
+    api
+      .event(id)
+      .then((e) => {
+        event = e
+        loadRule(e)
+      })
+      .catch((e) => (error = e.message))
     api.eventDeliveries(id).then((r) => (deliveries = r.deliveries)).catch(() => {})
   })
 
@@ -43,7 +103,25 @@
 </script>
 
 <div class="stack">
-  <div class="crumb"><a href="/" onclick={link}>Inbox</a><span class="faint">/</span><span class="muted mono">{id}</span></div>
+  <div class="crumb-row">
+    <div class="crumb"><a href="/" onclick={link}>Inbox</a><span class="faint">/</span><span class="muted mono">{id}</span></div>
+    {#if event}
+      <Button variant="secondary" size="sm" onclick={() => (silenceOpen = !silenceOpen)} disabled={silenceBusy}>{silenceOpen ? 'Cancel' : 'Silence events like this'}</Button>
+    {/if}
+  </div>
+  {#if event && silenceOpen}
+    <div class="silence-menu" in:pop>
+      <span class="caption muted">Stop pushes for future events matching:</span>
+      {#if event.fingerprint}
+        <button type="button" onclick={() => silence('fingerprint', true)}>fingerprint <span class="mono">{event.fingerprint}</span> <span class="muted">· {event.project_name}</span></button>
+      {/if}
+      <button type="button" onclick={() => silence('title', true)}>title “{event.title}” <span class="muted">· {event.project_name}</span></button>
+      <button type="button" onclick={() => silence('title', false)}>title “{event.title}” <span class="muted">· every project</span></button>
+      {#if event.source}
+        <button type="button" onclick={() => silence('source', true)}>source <span class="mono">{event.source}</span> <span class="muted">· {event.project_name}</span></button>
+      {/if}
+    </div>
+  {/if}
 
   {#if error}
     <Notice tone="bad">{error}</Notice>
@@ -61,6 +139,28 @@
     <Card><Skeleton lines={4} height={12} widths={['30%', '95%', '85%', '60%']} /></Card>
   {:else}
     <div class="stack rise">
+    {#if event.silenced}
+      <Card title="Silenced">
+        <p class="secondary lead">This event matched a silence rule and was not pushed to any phone.</p>
+        {#if rule}
+          <div class="rule">
+            <span class="pill">{rule.field}</span>
+            <span class="mono">{rule.value}</span>
+            <span class="muted caption">· {rule.project_name || 'every project'}{rule.note ? ` · ${rule.note}` : ''}</span>
+          </div>
+        {:else}
+          <p class="muted caption">The rule that silenced it has since been removed.</p>
+        {/if}
+        <div class="row" style="margin-top: 12px; flex-wrap: wrap">
+          <Button variant="secondary" size="sm" onclick={unsilence} disabled={silenceBusy}>Unsilence and push now</Button>
+          {#if rule}<Button variant="danger" size="sm" onclick={removeRule} disabled={silenceBusy}>Remove rule</Button>{/if}
+          <a href="/?silenced=true" onclick={link} class="small">All silenced events</a>
+        </div>
+      </Card>
+    {/if}
+    {#if silenceDone}
+      <div transition:panel><Notice tone="good">{silenceDone}</Notice></div>
+    {/if}
     <Card>
       <div class="head">
         <div class="meta">
@@ -73,6 +173,7 @@
         <h1>{event.title}</h1>
         {#if event.body}<p class="body">{event.body}</p>{/if}
       </div>
+
       <div class="facts">
         <div><span class="k">Occurred</span><span title={event.occurred_at}>{fullDate(event.occurred_at)}</span></div>
         <div><span class="k">Received</span><span title={event.created_at}>{fullDate(event.created_at)} · {relative(event.created_at)}</span></div>
@@ -208,6 +309,13 @@
   .meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font: var(--up-type-meta); }
   h1 { font: var(--up-type-metric); letter-spacing: -0.01em; word-break: break-word; }
   .body { font: var(--up-type-status-line); color: var(--up-text-secondary); white-space: pre-wrap; word-break: break-word; }
+  .crumb-row { display: flex; align-items: center; justify-content: space-between; gap: var(--up-space-3); }
+  .silence-menu { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--up-border-hairline); border-radius: var(--up-radius-tooltip); background: var(--up-bg); }
+  .rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: var(--up-type-meta); }
+  .pill { font: var(--up-type-code); padding: 3px 10px; border-radius: var(--up-radius-pill); background: var(--up-accent-tint); color: var(--up-accent-hover); }
+  .lead { font: var(--up-type-meta); line-height: 1.6; }
+  .silence-menu button { text-align: left; background: none; border: none; cursor: pointer; font: var(--up-type-meta); color: var(--up-ink); padding: 8px 10px; border-radius: var(--up-radius-control); transition: background 120ms ease-out; }
+  .silence-menu button:hover { background: var(--up-bg-hover); }
   .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-top: var(--up-space-5); padding-top: var(--up-space-4); border-top: 1px solid var(--up-border-hairline); }
   .facts > div { display: flex; flex-direction: column; gap: 2px; font: var(--up-type-meta); min-width: 0; }
   .facts span:last-child { overflow: hidden; text-overflow: ellipsis; }

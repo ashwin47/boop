@@ -95,7 +95,7 @@ Errors are JSON with the same shape everywhere:
 | 5xx | `internal` | Server fault | Retry with backoff |
 | — | (network error / timeout) | Server unreachable | Retry with backoff |
 
-Push delivery happens asynchronously after the 201; the response does not tell you whether a phone received it.
+Push delivery happens asynchronously after the 201; the response does not tell you whether a phone received it. The user may have silence rules (by fingerprint, title, or source) that store an event without pushing it — a stable `fingerprint` per distinct problem is what makes those rules useful, so send one when you can.
 
 ## Behaviour a good client has
 

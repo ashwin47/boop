@@ -221,6 +221,9 @@ struct EventRow: View {
                     Text(event.projectName).font(DS.Text.caption).foregroundStyle(DS.Colors.textSecondary)
                     Text("·").foregroundStyle(DS.Colors.textFaint).font(DS.Text.caption)
                     LevelBadge(level: event.level)
+                    if event.silenced {
+                        Text("· silenced").font(DS.Text.caption).foregroundStyle(DS.Colors.textInactive)
+                    }
                 }
                 Text(event.title)
                     .font(DS.Text.rowTitle)

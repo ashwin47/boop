@@ -34,6 +34,9 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Space.s4) {
                 if let event {
+                    if event.silenced {
+                        Notice(tone: .info, text: "Matched a silence rule, so it was not pushed. Manage silences in the web UI.")
+                    }
                     summary(event)
                     sections(event)
                     raw(event)

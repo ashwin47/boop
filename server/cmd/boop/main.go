@@ -25,6 +25,7 @@ import (
 	"github.com/chrisgreg/boop/server/internal/pairing"
 	"github.com/chrisgreg/boop/server/internal/projects"
 	"github.com/chrisgreg/boop/server/internal/settings"
+	"github.com/chrisgreg/boop/server/internal/silences"
 	"github.com/chrisgreg/boop/server/internal/web"
 )
 
@@ -91,7 +92,7 @@ func run() error {
 	evStore := events.New(db)
 	srv := &api.Server{
 		Config: cfg, DB: db, Log: log, Settings: st,
-		Projects: projects.New(db), Devices: devStore, Pairing: pairing.New(db, devStore), Events: evStore,
+		Projects: projects.New(db), Devices: devStore, Pairing: pairing.New(db, devStore), Events: evStore, Silences: silences.New(db),
 		Dispatcher: dispatcher, APNS: client, APNSError: apnsErr, Admin: admin, StartedAt: time.Now(), Web: web.Handler(),
 	}
 

@@ -59,6 +59,9 @@ type Event struct {
 	Data        json.RawMessage `json:"data"`
 	OccurredAt  string          `json:"occurred_at"`
 	CreatedAt   string          `json:"created_at"`
+	// SilenceID is set when a silence rule stopped this event from being pushed.
+	SilenceID string `json:"silence_id,omitempty"`
+	Silenced  bool   `json:"silenced"`
 }
 
 // Filter narrows List.
@@ -68,6 +71,7 @@ type Filter struct {
 	Source    string
 	Before    string // cursor: id of the last event seen
 	Limit     int
+	Silenced  *bool // nil = any
 }
 
 // Page is a page of events plus the cursor for the next page ("" when exhausted).
@@ -167,14 +171,15 @@ func (s *Store) Create(ctx context.Context, projectID string, in Input, r *redac
 	return s.Get(ctx, e.ID)
 }
 
-const selectCols = `e.id, COALESCE(e.external_id, ''), e.project_id, p.name, p.slug, p.icon, e.source, e.type, e.level, e.title, e.body, e.fingerprint, e.payload_json, e.occurred_at, e.created_at
+const selectCols = `e.id, COALESCE(e.external_id, ''), e.project_id, p.name, p.slug, p.icon, e.source, e.type, e.level, e.title, e.body, e.fingerprint, e.payload_json, e.occurred_at, e.created_at, COALESCE(e.silence_id, '')
 	FROM events e JOIN projects p ON p.id = e.project_id`
 
 func scan(row interface{ Scan(...any) error }) (Event, error) {
 	var e Event
 	var data string
-	err := row.Scan(&e.ID, &e.ExternalID, &e.ProjectID, &e.ProjectName, &e.ProjectSlug, &e.ProjectIcon, &e.Source, &e.Type, &e.Level, &e.Title, &e.Body, &e.Fingerprint, &data, &e.OccurredAt, &e.CreatedAt)
+	err := row.Scan(&e.ID, &e.ExternalID, &e.ProjectID, &e.ProjectName, &e.ProjectSlug, &e.ProjectIcon, &e.Source, &e.Type, &e.Level, &e.Title, &e.Body, &e.Fingerprint, &data, &e.OccurredAt, &e.CreatedAt, &e.SilenceID)
 	e.Data = json.RawMessage(data)
+	e.Silenced = e.SilenceID != ""
 	return e, err
 }
 
@@ -208,6 +213,13 @@ func (s *Store) List(ctx context.Context, f Filter) (Page, error) {
 	if f.Source != "" {
 		where = append(where, "e.source = ?")
 		args = append(args, f.Source)
+	}
+	if f.Silenced != nil {
+		if *f.Silenced {
+			where = append(where, "e.silence_id IS NOT NULL")
+		} else {
+			where = append(where, "e.silence_id IS NULL")
+		}
 	}
 	if f.Before != "" {
 		var createdAt string
@@ -243,6 +255,25 @@ func (s *Store) List(ctx context.Context, f Filter) (Page, error) {
 		page.NextCursor = page.Events[len(page.Events)-1].ID
 	}
 	return page, nil
+}
+
+// SetSilence records which rule silenced an event.
+func (s *Store) SetSilence(ctx context.Context, eventID, silenceID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE events SET silence_id = ? WHERE id = ?`, silenceID, eventID)
+	return err
+}
+
+// ClearSilence removes the silenced flag from an event.
+func (s *Store) ClearSilence(ctx context.Context, eventID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE events SET silence_id = NULL WHERE id = ?`, eventID)
+	return err
+}
+
+// CountSilenced returns how many stored events were silenced.
+func (s *Store) CountSilenced(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE silence_id IS NOT NULL`).Scan(&n)
+	return n, err
 }
 
 // Count returns the total number of stored events.
