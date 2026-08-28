@@ -37,7 +37,7 @@ Your apps POST events with a project API key. The Go server redacts and stores t
 | Go server (API, SQLite, APNs, embedded web UI) | `server/` |
 | Web UI (Svelte, built into the binary) | `server/web/` |
 | iOS app (SwiftUI, iOS 26, you build and sign it) | `ios/` — see [ios/README.md](ios/README.md) |
-| Client libraries | none bundled; point your LLM at [integration-llms.md](integration-llms.md) to generate one for any language |
+| Client libraries | separate repos — see [Integrations](#integrations) |
 | Native desktop client | planned |
 
 ## Quick start (Docker)
@@ -100,6 +100,62 @@ From GitHub Actions:
       -H "Content-Type: application/json" \
       -d '{"title": "${{ github.workflow }} ${{ job.status }}", "body": "${{ github.repository }}@${{ github.ref_name }}", "level": "${{ job.status == 'success' && 'success' || 'error' }}", "source": "github_actions"}'
 ```
+
+## Integrations
+
+Official clients live in their own repos. They all speak the same one endpoint (`POST /api/v1/events`), redact sensitive keys before sending, truncate rather than reject, retry only network errors and 5xx, and never crash the host application.
+
+### Elixir — [`boop_ex`](https://github.com/chrisgreg/boop_ex)
+
+```elixir
+{:boop_ex, "~> 1.0"}
+```
+
+```elixir
+config :boop_ex, url: System.fetch_env!("BOOP_URL"), api_key: System.fetch_env!("BOOP_API_KEY"), source: "my_app"
+
+Boop.send("Deploy complete")
+Boop.send(title: "Payment received", body: "£19.99", level: :success, data: %{customer_id: id})
+Boop.send_async(title: "Cron finished")          # :ok immediately, never raises
+Boop.Event.exception(e, __STACKTRACE__, tags: %{env: "prod"})   # rich error data
+```
+
+`send/2` returns `{:ok, %{id, created_at}}` or `{:error, %Boop.Error{code: …}}`; `send_async/2` runs on a supervised task. Ships a `usage-rules.md` for AI agents.
+
+### Elixir + ErrorTracker — [`boop_error_tracker`](https://github.com/chrisgreg/boop_error_tracker)
+
+```elixir
+{:error_tracker, "~> 0.9"}, {:boop_ex, "~> 1.0"}, {:boop_error_tracker, "~> 1.0"}
+```
+
+```elixir
+config :boop_error_tracker, environment: config_env(), source: "my_app"
+```
+
+Attaches to [ErrorTracker](https://github.com/elixir-error-tracker/error-tracker)'s telemetry events and pushes new errors and resolved-errors-that-came-back to your phone, with the exception, stacktrace (your frames highlighted), context and breadcrumbs. Optional per-occurrence pushes with per-error throttling; muted errors are never sent. It installs *next to* ErrorTracker and never touches its database or config.
+
+### Node.js — [`@boop/node`](https://github.com/chrisgreg/boop-node)
+
+```bash
+pnpm add @boop/node
+```
+
+```ts
+import boop, { Boop } from '@boop/node'   // default client reads BOOP_URL / BOOP_API_KEY
+
+await boop.send('Deploy complete')
+const client = new Boop({ url, apiKey, source: 'my_app' })
+const result = await client.send({ title: 'Payment received', level: 'success', data: { customerId } })
+if (!result.ok) console.warn(result.error.code)
+client.sendAsync({ title: 'Cron finished' })            // fire and forget, never throws
+client.exception(err, { tags: { env: 'prod' } })       // rich error data
+```
+
+TypeScript, ESM + CJS, zero runtime dependencies, Node 18+.
+
+### Anything else
+
+`curl` is a first-class client (see [Send an event](#send-an-event)), and [`integration-llms.md`](integration-llms.md) is a prompt you can hand to an LLM to generate a client for any other language that behaves like the ones above.
 
 ## API
 
