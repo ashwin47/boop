@@ -124,7 +124,7 @@ Official clients live in their own repos. They all speak the same one endpoint (
 ### Elixir — [`boop_ex`](https://github.com/chrisgreg/boop_ex)
 
 ```elixir
-{:boop_ex, "~> 1.0"}
+{:boop_ex, "~> 1.1"}
 ```
 
 ```elixir
@@ -133,6 +133,7 @@ config :boop_ex, url: System.fetch_env!("BOOP_URL"), api_key: System.fetch_env!(
 Boop.send("Deploy complete")
 Boop.send(title: "Payment received", body: "£19.99", level: :success, data: %{customer_id: id})
 Boop.send_async(title: "Cron finished")          # :ok immediately, never raises
+Boop.send(title: "Deploy failed", level: :error, actions: [{"Open run", run_url}])   # button on the push
 Boop.Event.exception(e, __STACKTRACE__, tags: %{env: "prod"})   # rich error data
 ```
 
@@ -141,11 +142,12 @@ Boop.Event.exception(e, __STACKTRACE__, tags: %{env: "prod"})   # rich error dat
 ### Elixir + ErrorTracker — [`boop_error_tracker`](https://github.com/chrisgreg/boop_error_tracker)
 
 ```elixir
-{:error_tracker, "~> 0.9"}, {:boop_ex, "~> 1.0"}, {:boop_error_tracker, "~> 1.0"}
+{:error_tracker, "~> 0.9"}, {:boop_ex, "~> 1.1"}, {:boop_error_tracker, "~> 1.1"}
 ```
 
 ```elixir
-config :boop_error_tracker, environment: config_env(), source: "my_app"
+config :boop_error_tracker, environment: config_env(), source: "my_app",
+  error_tracker_url: "https://my-app.com/dev/errors"   # "Open in ErrorTracker" button on every push
 ```
 
 Attaches to [ErrorTracker](https://github.com/elixir-error-tracker/error-tracker)'s telemetry events and pushes new errors and resolved-errors-that-came-back to your phone, with the exception, stacktrace (your frames highlighted), context and breadcrumbs. Optional per-occurrence pushes with per-error throttling; muted errors are never sent. It installs *next to* ErrorTracker and never touches its database or config.
