@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, type Event, type Delivery, type Silence } from '../lib/api'
-  import { link } from '../lib/router.svelte'
+  import { link, groupPath } from '../lib/router.svelte'
   import { fullDate, relative } from '../lib/format'
   import Card from '../lib/ui/Card.svelte'
   import LevelBadge from '../lib/ui/LevelBadge.svelte'
@@ -177,11 +177,21 @@
       <div class="facts">
         <div><span class="k">Occurred</span><span title={event.occurred_at}>{fullDate(event.occurred_at)}</span></div>
         <div><span class="k">Received</span><span title={event.created_at}>{fullDate(event.created_at)} · {relative(event.created_at)}</span></div>
-        {#if event.fingerprint}<div><span class="k">Fingerprint</span><span class="mono">{event.fingerprint}</span></div>{/if}
+        {#if event.fingerprint}<div><span class="k">Fingerprint</span><span class="mono">{event.fingerprint} <a class="small" href={groupPath(event.project_id, event.fingerprint)} onclick={link}>all occurrences</a></span></div>{/if}
         {#if event.external_id}<div><span class="k">External id</span><span class="mono">{event.external_id}</span></div>{/if}
         <div><span class="k">Event id</span><span class="mono">{event.id}</span></div>
       </div>
     </Card>
+
+    {#if event.actions && event.actions.length}
+      <Card title="Actions">
+        <div class="actions">
+          {#each event.actions as a (a.label + a.url)}
+            <a class="action" href={a.url} target="_blank" rel="noopener noreferrer">{a.label}<span class="faint">↗</span></a>
+          {/each}
+        </div>
+      </Card>
+    {/if}
 
     {#if exception}
       <Card title="Exception">
@@ -341,6 +351,10 @@
   .bc-m { word-break: break-word; }
   .linkish { background: none; border: none; cursor: pointer; font: var(--up-type-ui); color: var(--up-accent); padding: 0; }
   .linkish:hover { color: var(--up-accent-hover); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .action { display: inline-flex; align-items: center; gap: 6px; font: var(--up-type-ui); height: 34px; padding: 0 16px; border-radius: var(--up-radius-control); background: var(--up-accent); color: var(--up-text-on-dark); }
+  .action:hover { background: var(--up-accent-hover); color: var(--up-text-on-dark); }
+  .action .faint { color: inherit; opacity: 0.7; }
   .dls { display: flex; flex-direction: column; gap: 8px; }
   .dl { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 12px; align-items: center; font: var(--up-type-meta); }
   .r { text-align: right; }

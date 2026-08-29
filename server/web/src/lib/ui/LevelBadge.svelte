@@ -17,6 +17,7 @@
     gap: 7px;
     font: var(--up-type-small);
     white-space: nowrap;
+    min-width: 76px; /* same width for every level so chips line up in lists */
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
   .info { color: var(--boop-info-strong); }

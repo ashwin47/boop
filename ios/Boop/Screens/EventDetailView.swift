@@ -21,9 +21,16 @@ struct EventDetailView: View {
                     }
                     if let event {
                         ToolbarItem(placement: .topBarTrailing) {
-                            ShareLink(item: event.data.pretty, subject: Text(event.title)) {
+                            Menu {
+                                Button("Copy", systemImage: "doc.on.doc") { copy(event.plainText) }
+                                Button("Copy as Markdown", systemImage: "text.document") { copy(event.agentMarkdown) }
+                                ShareLink(item: event.agentMarkdown, subject: Text(event.title)) {
+                                    Label("Share", systemImage: "square.and.arrow.up")
+                                }
+                            } label: {
                                 Image(systemName: "square.and.arrow.up")
                             }
+                            .accessibilityIdentifier("event.share")
                         }
                     }
                 }
@@ -34,10 +41,14 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Space.s4) {
                 if let event {
+                    if copied {
+                        Notice(tone: .good, text: "Copied.").transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     if event.silenced {
                         Notice(tone: .info, text: "Matched a silence rule, so it was not pushed. Manage silences in the web UI.")
                     }
                     summary(event)
+                    actions(event)
                     sections(event)
                     raw(event)
                 } else if let error {
@@ -53,6 +64,42 @@ struct EventDetailView: View {
     }
 
     // MARK: Pieces
+
+    @State private var copied = false
+
+    private func copy(_ text: String) {
+        UIPasteboard.general.string = text
+        withAnimation(DS.Motion.snappy) { copied = true }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            withAnimation(DS.Motion.gentle) { copied = false }
+        }
+    }
+
+    @ViewBuilder
+    private func actions(_ e: Event) -> some View {
+        if !e.actions.isEmpty {
+            Card(title: "Actions") {
+                FlowLayout(spacing: 8) {
+                    ForEach(e.actions, id: \.self) { a in
+                        if let url = a.destination {
+                            Link(destination: url) {
+                                HStack(spacing: 6) {
+                                    Text(a.label)
+                                    Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .semibold))
+                                }
+                                .font(DS.Text.ui)
+                                .foregroundStyle(DS.Colors.textOnDark)
+                                .padding(.horizontal, 14)
+                                .frame(height: 34)
+                                .background(DS.Colors.accent, in: RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private func summary(_ e: Event) -> some View {
         Card {

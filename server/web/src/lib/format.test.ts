@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { relative, duration, compact, dayGroup, retentionLabel } from './format'
+import { relative, duration, compact, dayGroup, retentionLabel, clock, seenRange } from './format'
 
 const now = new Date('2026-08-28T12:00:00Z')
 
@@ -49,5 +49,20 @@ describe('retentionLabel', () => {
   it('reads 0 as unlimited', () => {
     expect(retentionLabel(0)).toBe('Unlimited')
     expect(retentionLabel(30)).toBe('30 days')
+  })
+})
+
+describe('clock / seenRange', () => {
+  // These run in whatever TZ vitest has; compare against the same formatter.
+  const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+  it('shows only the time on the same day', () => {
+    expect(clock('2026-08-28T09:31:00Z', now)).toBe(hm('2026-08-28T09:31:00Z'))
+  })
+  it('adds the date on other days', () => {
+    expect(clock('2026-08-12T09:31:00Z', now)).toMatch(/^Aug 12 /)
+  })
+  it('builds the seen range', () => {
+    expect(seenRange('2026-08-28T09:31:00Z', '2026-08-28T10:42:00Z', now)).toBe(`First seen ${hm('2026-08-28T09:31:00Z')} · Last seen ${hm('2026-08-28T10:42:00Z')}`)
+    expect(clock(null)).toBe('—')
   })
 })

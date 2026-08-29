@@ -1,4 +1,4 @@
-// Motion presets. The design system wants near-instant state changes, so everything is short
+// Motion presets. State changes should feel near-instant, so everything is short
 // and ease-out, and it all collapses to zero under prefers-reduced-motion.
 import { cubicOut } from 'svelte/easing'
 import { fade, fly, slide, scale } from 'svelte/transition'

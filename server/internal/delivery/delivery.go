@@ -112,6 +112,9 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event, p projects.Pro
 		ProjectID: p.ID,
 		Prominent: e.Level == levels.Critical,
 	}
+	for _, a := range e.Actions {
+		n.Actions = append(n.Actions, apns.Action{Label: a.Label, URL: a.URL})
+	}
 	if n.Body == "" {
 		n.Body = e.Title
 		n.Title = p.Name

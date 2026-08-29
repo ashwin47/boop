@@ -21,6 +21,7 @@ import (
 	"github.com/chrisgreg/boop/server/internal/events"
 	"github.com/chrisgreg/boop/server/internal/events/levels"
 	"github.com/chrisgreg/boop/server/internal/events/redact"
+	"github.com/chrisgreg/boop/server/internal/mcp"
 	"github.com/chrisgreg/boop/server/internal/pairing"
 	"github.com/chrisgreg/boop/server/internal/projects"
 	"github.com/chrisgreg/boop/server/internal/settings"
@@ -28,7 +29,7 @@ import (
 )
 
 // Version is the server version, overridden at build time via -ldflags.
-var Version = "1.1.0"
+var Version = "1.2.0"
 
 // Server holds every dependency the handlers need.
 type Server struct {
@@ -96,6 +97,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/settings", s.adminAuth(s.getSettings))
 	mux.Handle("PATCH /api/v1/settings", s.adminAuth(s.updateSettings))
 	mux.Handle("POST /api/v1/test", s.adminAuth(s.testNotification))
+
+	// MCP (read-only) for AI agents: Streamable HTTP at /mcp.
+	mux.Handle("/mcp", s.mcpAuth(mcp.Handler(mcp.NewServer(mcp.Stores{Projects: s.Projects, Events: s.Events}, Version), s.Log)))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
@@ -189,6 +193,40 @@ func (s *Server) readerAuth(next http.HandlerFunc) http.Handler {
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxDevice, d)))
+	})
+}
+
+// mcpAuth guards the MCP endpoint. It accepts the configured BOOP_MCP_TOKEN,
+// a device credential, or an admin session/HTTP Basic login (or nothing when
+// admin auth is off, like the rest of the read API). Project API keys are
+// refused: they are write-only ingestion credentials.
+func (s *Server) mcpAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if on, err := s.mcpEnabled(r.Context()); err != nil {
+			s.fail(w, err)
+			return
+		} else if !on {
+			writeError(w, http.StatusNotFound, "mcp_disabled", "the MCP endpoint is turned off in Settings")
+			return
+		}
+		cred := auth.Bearer(r)
+		switch {
+		case cred == "":
+			if !s.Admin.Authorized(r) {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "an MCP token (BOOP_MCP_TOKEN) or device credential is required: Authorization: Bearer ...")
+				return
+			}
+		case s.Config.MCPToken != "" && auth.Equal(auth.Hash(cred), auth.Hash(s.Config.MCPToken)):
+		case auth.HasPrefix(cred, auth.PrefixDevice):
+			if _, err := s.Devices.Authenticate(r.Context(), cred); err != nil {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid device credential")
+				return
+			}
+		default:
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid MCP credential")
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -436,12 +474,22 @@ type settingsResponse struct {
 	RedactKeys     []string `json:"redact_keys"`
 	DefaultRedact  []string `json:"default_redact_keys"`
 	SetupCompleted bool     `json:"setup_completed"`
+	MCPEnabled     bool     `json:"mcp_enabled"`
+	// MCPTokenSet reports whether BOOP_MCP_TOKEN is configured (never the token itself).
+	MCPTokenSet bool `json:"mcp_token_set"`
 }
 
 type settingsInput struct {
 	RetentionDays  *int      `json:"retention_days"`
 	RedactKeys     *[]string `json:"redact_keys"`
 	SetupCompleted *bool     `json:"setup_completed"`
+	MCPEnabled     *bool     `json:"mcp_enabled"`
+}
+
+// mcpEnabled reads the MCP switch; it defaults to on.
+func (s *Server) mcpEnabled(ctx context.Context) (bool, error) {
+	v, err := s.Settings.Get(ctx, settings.KeyMCPEnabled, "true")
+	return v != "false" && v != "0", err
 }
 
 func (s *Server) readSettings(ctx context.Context) (settingsResponse, error) {
@@ -457,7 +505,11 @@ func (s *Server) readSettings(ctx context.Context) (settingsResponse, error) {
 		out.RedactKeys = []string{}
 	}
 	out.DefaultRedact = redact.DefaultKeys
-	out.SetupCompleted, err = s.Settings.GetBool(ctx, settings.KeySetupCompleted)
+	if out.SetupCompleted, err = s.Settings.GetBool(ctx, settings.KeySetupCompleted); err != nil {
+		return out, err
+	}
+	out.MCPTokenSet = s.Config.MCPToken != ""
+	out.MCPEnabled, err = s.mcpEnabled(ctx)
 	return out, err
 }
 
@@ -508,6 +560,13 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if in.MCPEnabled != nil {
+		if err := s.Settings.Set(ctx, settings.KeyMCPEnabled, strconv.FormatBool(*in.MCPEnabled)); err != nil {
+			s.fail(w, err)
+			return
+		}
+		s.Log.Info("settings.mcp", "enabled", *in.MCPEnabled)
+	}
 	out, err := s.readSettings(ctx)
 	if err != nil {
 		s.fail(w, err)
@@ -538,7 +597,8 @@ func (s *Server) createEvent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := events.Filter{ProjectID: q.Get("project"), Level: q.Get("level"), Source: q.Get("source"), Before: q.Get("before")}
+	f := events.Filter{ProjectID: q.Get("project"), Level: q.Get("level"), Source: q.Get("source"), Fingerprint: q.Get("fingerprint"), Before: q.Get("before"),
+		Since: q.Get("since"), Until: q.Get("until"), Grouped: q.Get("grouped") == "true" || q.Get("grouped") == "1"}
 	if f.Level != "" && !levels.Valid(f.Level) {
 		writeError(w, http.StatusUnprocessableEntity, "invalid", "level must be one of "+strings.Join(levels.All, ", "))
 		return

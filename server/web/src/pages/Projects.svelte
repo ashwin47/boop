@@ -127,15 +127,14 @@
 
   {#each projects as p (p.id)}
     <div animate:reorder in:soft>
-    <Card>
-      {#snippet action()}
-        <div class="row">
-          <Button variant="ghost" size="sm" onclick={() => (editing = editing === p.id ? null : p.id)}>{editing === p.id ? 'Close' : 'Settings'}</Button>
+    <Card compact>
+      <div class="phead">
+        <ProjectIcon icon={p.icon} size={20} />
+        <div class="ptext">
+          <div class="pname"><span class="n">{p.name}</span><span class="mono muted caption">{p.slug}</span></div>
+          <div class="pmeta muted caption">{p.notify ? `notify ≥ ${LEVEL_LABEL[p.min_level].toLowerCase()}` : 'notifications off'} · created {relative(p.created_at)}</div>
         </div>
-      {/snippet}
-      <div class="pname"><ProjectIcon icon={p.icon} size={18} /><span class="n">{p.name}</span></div>
-      <div class="pmeta muted caption">
-        <span class="mono">{p.slug}</span> · {p.notify ? `notify ≥ ${LEVEL_LABEL[p.min_level].toLowerCase()}` : 'notifications off'} · created {relative(p.created_at)}
+        <Button variant="ghost" size="sm" onclick={() => (editing = editing === p.id ? null : p.id)}>{editing === p.id ? 'Close' : 'Settings'}</Button>
       </div>
 
       {#if editing === p.id}
@@ -177,9 +176,11 @@
   .actions { display: flex; justify-content: flex-end; margin-top: var(--up-space-4); }
   .new { display: flex; gap: var(--up-space-3); align-items: center; }
   .new :global(input:first-child) { flex: 1; }
-  .pname { display: flex; align-items: center; gap: 8px; margin-top: -8px; }
-  .n { font: var(--up-type-row-title); }
-  .pmeta { margin-top: 2px; }
+  .phead { display: flex; align-items: center; gap: 12px; }
+  .ptext { flex: 1; min-width: 0; }
+  .pname { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .n { font: var(--up-type-row-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pmeta { margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .edit { margin-top: var(--up-space-4); }
   @media (max-width: 520px) {
     .new { flex-wrap: wrap; }

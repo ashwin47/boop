@@ -33,6 +33,20 @@ export function fullDate(s: string | null | undefined): string {
   return `${shortDate(d)} · ${d.toLocaleTimeString('en-GB', { hour12: false })}`
 }
 
+/** "09:31" when on the same day as `now`, otherwise "Aug 12 09:31". */
+export function clock(s: string | null | undefined, now: Date = new Date()): string {
+  const d = parseTime(s)
+  if (!d) return '—'
+  const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  return sameDay ? hm : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${hm}`
+}
+
+/** "First seen 09:31 · Last seen 10:42" for a grouped row. */
+export function seenRange(first: string, last: string, now: Date = new Date()): string {
+  return `First seen ${clock(first, now)} · Last seen ${clock(last, now)}`
+}
+
 /** "Today", "Yesterday", or a short date — for grouping the inbox. */
 export function dayGroup(s: string, now: Date = new Date()): string {
   const d = parseTime(s)

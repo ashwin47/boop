@@ -5,6 +5,7 @@
   import Button from '../lib/ui/Button.svelte'
   import Select from '../lib/ui/Select.svelte'
   import Input from '../lib/ui/Input.svelte'
+  import Switch from '../lib/ui/Switch.svelte'
   import SettingRow from '../lib/ui/SettingRow.svelte'
   import StatusDot from '../lib/ui/StatusDot.svelte'
   import Notice from '../lib/ui/Notice.svelte'
@@ -73,6 +74,14 @@
     load()
   })
 
+  async function setMCP(v: boolean) {
+    try {
+      settings = await api.updateSettings({ mcp_enabled: v })
+    } catch (e: any) {
+      error = e.message
+    }
+  }
+
   async function setRetention(v: string) {
     try {
       settings = await api.updateSettings({ retention_days: Number(v) })
@@ -123,6 +132,7 @@
     { value: '0', label: 'Unlimited' },
   ]
   const lastPush = $derived(status?.last_push ?? null)
+  const origin = typeof location !== 'undefined' ? location.origin : ''
 </script>
 
 <div class="stack">
@@ -231,6 +241,13 @@
     <Card title="Retention">
       <SettingRow label="Keep events for" hint="Older events are deleted automatically once an hour. Unlimited keeps everything. If BOOP_RETENTION_DAYS is set in the environment it overrides this on restart.">
         <Select value={String(settings.retention_days)} options={retentionOptions.some((o) => o.value === String(settings!.retention_days)) ? retentionOptions : [...retentionOptions, { value: String(settings.retention_days), label: `${settings.retention_days} days` }]} onchange={(e) => setRetention((e.currentTarget as HTMLSelectElement).value)} style="width: 150px" />
+      </SettingRow>
+    </Card>
+
+    <Card title="MCP">
+      <p class="secondary lead">Lets the AI assistant you already use read your events over the Model Context Protocol (read-only: list, search and inspect events and projects). Endpoint: <span class="mono">{status?.base_url ?? origin}/mcp</span>.</p>
+      <SettingRow label="MCP endpoint" hint={settings.mcp_token_set ? 'Connect with the BOOP_MCP_TOKEN bearer token, a device credential, or your admin login.' : 'No BOOP_MCP_TOKEN is set: device credentials and the admin login work; set the env var to give an agent its own token.'}>
+        <Switch checked={settings.mcp_enabled} onchange={setMCP} label="MCP endpoint" />
       </SettingRow>
     </Card>
 

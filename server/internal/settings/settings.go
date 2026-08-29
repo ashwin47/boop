@@ -16,6 +16,7 @@ const (
 	KeyRetentionDays  = "retention_days"
 	KeySetupCompleted = "setup_completed"
 	KeyRedactKeys     = "redact_keys" // comma-separated, added to the built-in list
+	KeyMCPEnabled     = "mcp_enabled" // "false" turns the /mcp endpoint off; unset = on
 )
 
 // Store reads and writes settings.

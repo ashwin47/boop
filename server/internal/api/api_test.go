@@ -971,3 +971,300 @@ func TestSilences(t *testing.T) {
 		t.Errorf("after unsilence: %s", r.raw)
 	}
 }
+
+func TestEventActions(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("Shop")
+	_, c1 := e.pairDevice("phone")
+	e.do("POST", "/api/v1/devices", c1, map[string]string{"device_token": "t1"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.server.Dispatcher.Start(ctx)
+
+	body := `{"title":"Payment received","body":"£19.99","level":"success","actions":[{"label":" Open in Stripe ","url":"https://dashboard.stripe.com/payments/pi_1"},{"label":"Open app","url":"myshop://orders/42"}]}`
+	r := e.do("POST", "/api/v1/events", key, body)
+	if r.status != 201 {
+		t.Fatalf("create: %d %s", r.status, r.raw)
+	}
+	id := r.body["id"].(string)
+	r = e.do("GET", "/api/v1/events/"+id, "", nil)
+	acts, _ := r.body["actions"].([]any)
+	if len(acts) != 2 || acts[0].(map[string]any)["label"] != "Open in Stripe" || acts[1].(map[string]any)["url"] != "myshop://orders/42" {
+		t.Fatalf("actions round trip: %s", r.raw)
+	}
+	// Events without actions omit the key entirely.
+	r = e.do("POST", "/api/v1/events", key, `{"title":"plain"}`)
+	r = e.do("GET", "/api/v1/events/"+r.body["id"].(string), "", nil)
+	if _, ok := r.body["actions"]; ok {
+		t.Errorf("plain event should omit actions: %s", r.raw)
+	}
+	// Grouped/ungrouped listings carry them too.
+	r = e.do("GET", "/api/v1/events?level=success", "", nil)
+	if ev := r.body["events"].([]any)[0].(map[string]any); len(ev["actions"].([]any)) != 2 {
+		t.Errorf("list actions: %s", r.raw)
+	}
+
+	// The push carries the actions and asks for the actions category.
+	deadline := time.Now().Add(3 * time.Second)
+	for len(e.sender.sent) < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(e.sender.sent) < 1 {
+		t.Fatal("no push sent")
+	}
+	n := e.sender.sent[0].n
+	if len(n.Actions) != 2 || n.Actions[0].Label != "Open in Stripe" {
+		t.Errorf("push actions = %+v", n.Actions)
+	}
+	payload, _ := apns.Payload(n)
+	var p map[string]any
+	_ = json.Unmarshal(payload, &p)
+	aps := p["aps"].(map[string]any)
+	if aps["category"] != apns.CategoryWithActions || aps["mutable-content"] != float64(1) || len(p["actions"].([]any)) != 2 {
+		t.Errorf("payload: %s", payload)
+	}
+	plain, _ := apns.Payload(apns.Notification{Title: "t", Body: "b"})
+	if strings.Contains(string(plain), "category") || strings.Contains(string(plain), "actions") {
+		t.Errorf("payload without actions must not set a category: %s", plain)
+	}
+
+	// Validation.
+	bad := []string{
+		`{"title":"x","actions":[{"label":"","url":"https://a"}]}`,
+		`{"title":"x","actions":[{"label":"a","url":""}]}`,
+		`{"title":"x","actions":[{"label":"a","url":"/relative"}]}`,
+		`{"title":"x","actions":[{"label":"a","url":"javascript:alert(1)"}]}`,
+		`{"title":"x","actions":[{"label":"a","url":"DATA:text/html,hi"}]}`,
+		`{"title":"x","actions":[{"label":"` + strings.Repeat("l", 41) + `","url":"https://a"}]}`,
+		`{"title":"x","actions":[{"label":"1","url":"https://a"},{"label":"2","url":"https://a"},{"label":"3","url":"https://a"},{"label":"4","url":"https://a"}]}`,
+	}
+	for _, b := range bad {
+		if r := e.do("POST", "/api/v1/events", key, b); r.status != 422 {
+			t.Errorf("%s: want 422, got %d %s", b, r.status, r.raw)
+		}
+	}
+}
+
+func TestGroupedListing(t *testing.T) {
+	e := newEnv(t)
+	p1, k1 := e.createProject("Uini")
+	_, k2 := e.createProject("Infra")
+	post := func(key, title, level, fp string) string {
+		t.Helper()
+		r := e.do("POST", "/api/v1/events", key, map[string]string{"title": title, "level": level, "fingerprint": fp})
+		if r.status != 201 {
+			t.Fatalf("post %s: %d %s", title, r.status, r.raw)
+		}
+		return r.body["id"].(string)
+	}
+	var keyErrIDs []string
+	for i := 0; i < 5; i++ {
+		keyErrIDs = append(keyErrIDs, post(k1, "KeyError", "error", "keyerror"))
+	}
+	post(k1, "Deploy done", "success", "") // no fingerprint: never grouped
+	post(k1, "Timeout", "warning", "timeout")
+	post(k1, "Timeout", "info", "timeout")    // same fingerprint, different level, latest
+	post(k2, "KeyError", "error", "keyerror") // same fingerprint, other project
+	post(k1, "Deploy done", "success", "")
+
+	// Ungrouped: everything.
+	r := e.do("GET", "/api/v1/events", "", nil)
+	if n := len(r.body["events"].([]any)); n != 10 {
+		t.Fatalf("ungrouped: %d", n)
+	}
+	if _, ok := r.body["events"].([]any)[0].(map[string]any)["group"]; ok {
+		t.Errorf("ungrouped rows must not carry group info")
+	}
+
+	// Grouped: 5 KeyErrors collapse, the two Timeouts collapse, plain events stay, other project separate.
+	r = e.do("GET", "/api/v1/events?grouped=true", "", nil)
+	evs := r.body["events"].([]any)
+	var titles []string
+	byFp := map[string]map[string]any{}
+	for _, x := range evs {
+		ev := x.(map[string]any)
+		titles = append(titles, ev["title"].(string)+"@"+ev["project_name"].(string))
+		if fp, _ := ev["fingerprint"].(string); fp != "" {
+			byFp[ev["project_id"].(string)+"/"+fp] = ev
+		}
+	}
+	if len(evs) != 5 || strings.Join(titles, ",") != "Deploy done@Uini,KeyError@Infra,Timeout@Uini,Deploy done@Uini,KeyError@Uini" {
+		t.Fatalf("grouped rows: %v\n%s", titles, r.raw)
+	}
+	ke := byFp[p1+"/keyerror"]
+	g := ke["group"].(map[string]any)
+	if g["count"] != float64(5) || ke["id"] != keyErrIDs[4] {
+		t.Errorf("keyerror group: %v (id %v, want %s)", g, ke["id"], keyErrIDs[4])
+	}
+	if g["first_seen"].(string) >= g["last_seen"].(string) {
+		t.Errorf("first_seen %v should precede last_seen %v", g["first_seen"], g["last_seen"])
+	}
+	// The other project's identical fingerprint is its own group of one.
+	for _, x := range evs {
+		ev := x.(map[string]any)
+		if ev["project_name"] == "Infra" && ev["group"].(map[string]any)["count"] != float64(1) {
+			t.Errorf("cross-project grouping: %v", ev["group"])
+		}
+		if ev["fingerprint"] == "" {
+			if _, ok := ev["group"]; ok {
+				t.Errorf("unfingerprinted event carries group: %v", ev)
+			}
+		}
+	}
+	if byFp[p1+"/timeout"]["group"].(map[string]any)["count"] != float64(2) || byFp[p1+"/timeout"]["level"] != "info" {
+		t.Errorf("timeout group should be latest (info) of 2: %v", byFp[p1+"/timeout"])
+	}
+
+	// Filters apply inside the group: level=warning shows the warning Timeout with count 1.
+	r = e.do("GET", "/api/v1/events?grouped=true&level=warning", "", nil)
+	evs = r.body["events"].([]any)
+	if len(evs) != 1 || evs[0].(map[string]any)["level"] != "warning" || evs[0].(map[string]any)["group"].(map[string]any)["count"] != float64(1) {
+		t.Errorf("filtered group: %s", r.raw)
+	}
+
+	// Cursor pagination in grouped mode never repeats a group and reaches everything.
+	var seen []string
+	cursor := ""
+	for pages := 0; pages < 10; pages++ {
+		url := "/api/v1/events?grouped=true&limit=2"
+		if cursor != "" {
+			url += "&before=" + cursor
+		}
+		r = e.do("GET", url, "", nil)
+		for _, ev := range r.body["events"].([]any) {
+			m := ev.(map[string]any)
+			seen = append(seen, m["title"].(string)+"@"+m["project_name"].(string))
+		}
+		c, _ := r.body["next_cursor"].(string)
+		if c == "" {
+			break
+		}
+		cursor = c
+	}
+	if strings.Join(seen, ",") != strings.Join(titles, ",") {
+		t.Errorf("paged grouped: %v want %v", seen, titles)
+	}
+
+	// Occurrences: filter by fingerprint (and project) in ungrouped mode.
+	r = e.do("GET", "/api/v1/events?project="+p1+"&fingerprint=keyerror", "", nil)
+	if n := len(r.body["events"].([]any)); n != 5 {
+		t.Errorf("occurrences: %d %s", n, r.raw)
+	}
+	r = e.do("GET", "/api/v1/events?fingerprint=keyerror", "", nil)
+	if n := len(r.body["events"].([]any)); n != 6 {
+		t.Errorf("occurrences across projects: %d", n)
+	}
+
+	// since/until window on created_at.
+	mid := byFp[p1+"/keyerror"]["created_at"].(string)
+	r = e.do("GET", "/api/v1/events?since="+mid, "", nil)
+	if n := len(r.body["events"].([]any)); n != 6 { // the latest KeyError + 5 after it
+		t.Errorf("since: %d %s", n, r.raw)
+	}
+	r = e.do("GET", "/api/v1/events?until="+mid, "", nil)
+	if n := len(r.body["events"].([]any)); n != 4 {
+		t.Errorf("until: %d", n)
+	}
+	if r := e.do("GET", "/api/v1/events?since=yesterday", "", nil); r.status != 422 {
+		t.Errorf("bad since: %d", r.status)
+	}
+}
+
+// mcpCall performs a raw JSON-RPC tools/call against /mcp with the given bearer.
+func (e *env) mcpCall(bearer, tool string, args map[string]any) resp {
+	e.t.Helper()
+	body := map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": tool, "arguments": args}}
+	buf, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", e.srv.URL+"/mcp", bytes.NewReader(buf))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	out := resp{status: res.StatusCode, raw: raw}
+	_ = json.Unmarshal(raw, &out.body)
+	return out
+}
+
+func TestMCPEndpointAuth(t *testing.T) {
+	e := newEnv(t)
+	_, projKey := e.createProject("Uini")
+	_, devCred := e.pairDevice("phone")
+	e.do("POST", "/api/v1/events", projKey, map[string]string{"title": "hello"})
+	// Lock the server down: admin login required, MCP token configured.
+	e.server.Config.MCPToken = "boop_mcp_test_token_1234"
+	e.server.Admin = auth.NewAdmin("admin", "correct horse battery")
+
+	cases := []struct {
+		name   string
+		bearer string
+		want   int
+	}{
+		{"no credential", "", 401},
+		{"junk", "nope", 401},
+		{"wrong mcp token", "boop_mcp_test_token_9999", 401},
+		{"project key is refused", projKey, 401},
+		{"mcp token", "boop_mcp_test_token_1234", 200},
+		{"device credential", devCred, 200},
+	}
+	for _, c := range cases {
+		r := e.mcpCall(c.bearer, "list_projects", nil)
+		if r.status != c.want {
+			t.Errorf("%s: %d %s", c.name, r.status, r.raw)
+		}
+	}
+	// A successful call really returns data.
+	r := e.mcpCall("boop_mcp_test_token_1234", "list_events", map[string]any{"limit": 5})
+	if !strings.Contains(string(r.raw), `"hello"`) || strings.Contains(string(r.raw), "isError") {
+		t.Errorf("mcp result: %s", r.raw)
+	}
+	// Admin HTTP Basic works on the endpoint when auth is enabled.
+	req, _ := http.NewRequest("POST", e.srv.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.SetBasicAuth("admin", "correct horse battery")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Errorf("basic auth: %d", res.StatusCode)
+	}
+
+	// With admin auth off and no token, /mcp is open like the rest of the read API.
+	e.server.Admin = auth.NewAdmin("", "")
+	e.server.Config.MCPToken = ""
+	if r := e.mcpCall("", "list_projects", nil); r.status != 200 {
+		t.Errorf("open mode: %d %s", r.status, r.raw)
+	}
+	if r := e.mcpCall(projKey, "list_projects", nil); r.status != 401 {
+		t.Errorf("project key must still be refused in open mode: %d", r.status)
+	}
+
+	// The Settings switch turns the endpoint off entirely (even with a valid credential).
+	r = e.do("GET", "/api/v1/settings", "", nil)
+	if r.body["mcp_enabled"] != true || r.body["mcp_token_set"] != false {
+		t.Errorf("settings default: %s", r.raw)
+	}
+	if r := e.do("PATCH", "/api/v1/settings", "", map[string]any{"mcp_enabled": false}); r.status != 200 || r.body["mcp_enabled"] != false {
+		t.Fatalf("disable: %d %s", r.status, r.raw)
+	}
+	if r := e.mcpCall(devCred, "list_projects", nil); r.status != 404 || r.body["error"] != "mcp_disabled" {
+		t.Errorf("disabled: %d %s", r.status, r.raw)
+	}
+	e.do("PATCH", "/api/v1/settings", "", map[string]any{"mcp_enabled": true})
+	if r := e.mcpCall(devCred, "list_projects", nil); r.status != 200 {
+		t.Errorf("re-enabled: %d", r.status)
+	}
+	e.server.Config.MCPToken = "boop_mcp_test_token_1234"
+	if r := e.do("GET", "/api/v1/settings", "", nil); r.body["mcp_token_set"] != true || strings.Contains(string(r.raw), "boop_mcp_test_token_1234") {
+		t.Errorf("token flag must be reported without the token: %s", r.raw)
+	}
+}

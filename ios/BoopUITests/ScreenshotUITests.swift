@@ -12,6 +12,11 @@ final class ScreenshotUITests: XCTestCase {
         sleep(1)
         attach(app, "inbox")
         app.staticTexts["KeyError"].firstMatch.tap()
+        // A grouped row opens the occurrences first; a single event opens the sheet directly.
+        if app.staticTexts["Occurrences"].waitForExistence(timeout: 3) {
+            attach(app, "group")
+            app.buttons.containing(.staticText, identifier: "KeyError").firstMatch.tap()
+        }
         XCTAssertTrue(app.staticTexts["Stacktrace"].waitForExistence(timeout: 5))
         sleep(1)
         attach(app, "event-sheet")
@@ -19,6 +24,8 @@ final class ScreenshotUITests: XCTestCase {
         sleep(1)
         attach(app, "event-sheet-scrolled")
         app.buttons["Close"].firstMatch.tap()
+        if app.staticTexts["Occurrences"].waitForExistence(timeout: 2) { app.navigationBars.buttons.firstMatch.tap() }
+        XCTAssertTrue(app.navigationBars["Inbox"].waitForExistence(timeout: 5))
         app.navigationBars["Inbox"].buttons.firstMatch.tap()
         sleep(1)
         attach(app, "filter-menu")

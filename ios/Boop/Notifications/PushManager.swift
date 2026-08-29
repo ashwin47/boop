@@ -64,6 +64,11 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        // An action button: open its URL and stay out of the way.
+        if let url = NotificationActions.url(for: response.actionIdentifier, userInfo: info) {
+            await MainActor.run { UIApplication.shared.open(url) }
+            return
+        }
         let eventID = info["event_id"] as? String
         let title = response.notification.request.content.title
         let body = response.notification.request.content.body

@@ -14,6 +14,8 @@ final class EventTests: XCTestCase {
         "breadcrumbs": [{"timestamp": "12:51", "category": "nav", "message": "GET /"}],
         "custom": {"deep": [1, 2, {"k": "v"}]}
       },
+      "actions": [{"label": "Open", "url": "https://uini.app/errors/1"}, {"label": "App", "url": "uini://errors/1"}],
+      "group": {"count": 47, "first_seen": "2026-08-28T09:31:00Z", "last_seen": "2026-08-28T10:42:00Z"},
       "occurred_at": "2026-08-28T12:51:44Z",
       "created_at": "2026-08-28T14:10:46.627043000Z",
       "silenced": true
@@ -25,6 +27,11 @@ final class EventTests: XCTestCase {
         XCTAssertEqual(e.level, .error)
         XCTAssertTrue(e.silenced)
         XCTAssertEqual(e.externalID, "4f9d")
+        XCTAssertEqual(e.actions.map(\.label), ["Open", "App"])
+        XCTAssertEqual(e.actions[1].destination?.scheme, "uini")
+        XCTAssertEqual(e.group?.count, 47)
+        XCTAssertTrue(e.isRepeated)
+        XCTAssertEqual(e.group?.lastSeen.timeIntervalSince(e.group!.firstSeen), 71 * 60)
         XCTAssertEqual(Calendar(identifier: .gregorian).component(.year, from: e.createdAt), 2026)
         // Nanosecond timestamps are accepted and keep millisecond precision.
         XCTAssertEqual(e.createdAt.timeIntervalSince1970, 1_787_926_246.627, accuracy: 0.001)
@@ -48,6 +55,9 @@ final class EventTests: XCTestCase {
         let e = try APIClient.decoder.decode(Event.self, from: Data(json.utf8))
         XCTAssertEqual(e.level, .info)
         XCTAssertFalse(e.silenced)
+        XCTAssertEqual(e.actions, [])
+        XCTAssertNil(e.group)
+        XCTAssertFalse(e.isRepeated)
         XCTAssertEqual(e.body, "")
         XCTAssertEqual(e.data, .object([:]))
         XCTAssertTrue(e.sections.isEmpty)

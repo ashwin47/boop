@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  let { title, action, children, flush = false }: { title?: string; action?: Snippet; children: Snippet; flush?: boolean } = $props()
+  let { title, action, children, flush = false, compact = false }: { title?: string; action?: Snippet; children: Snippet; flush?: boolean; compact?: boolean } = $props()
 </script>
 
-<section class="card" class:flush>
+<section class="card" class:flush class:compact>
   {#if title || action}
     <header class:only-action={!title}>
       {#if title}<h2>{title}</h2>{/if}
@@ -21,6 +21,7 @@
     padding: var(--up-space-5);
   }
   .flush { padding: var(--up-space-2); padding-top: var(--up-space-4); }
+  .compact { padding: 14px var(--up-space-4); }
   header {
     display: flex;
     align-items: center;

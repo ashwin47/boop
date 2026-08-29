@@ -25,6 +25,18 @@ enum Formatting {
         return "\(d) · \(t)"
     }
 
+    /// "09:31" on the same day as `now`, otherwise "Aug 12 09:31".
+    static func clock(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        let t = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        if calendar.isDate(date, inSameDayAs: now) { return t }
+        return "\(shortDate(date)) \(t)"
+    }
+
+    /// "First seen 09:31 · Last seen 10:42" for a grouped row.
+    static func seenRange(_ group: GroupInfo, now: Date = .now, calendar: Calendar = .current) -> String {
+        "First seen \(clock(group.firstSeen, now: now, calendar: calendar)) · Last seen \(clock(group.lastSeen, now: now, calendar: calendar))"
+    }
+
     /// "Today", "Yesterday", or a short date.
     static func dayGroup(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now) { return "Today" }

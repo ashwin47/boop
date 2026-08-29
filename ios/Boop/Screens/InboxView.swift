@@ -10,7 +10,15 @@ final class InboxModel {
     var error: String?
     var level: Level?
     var project: String?
+    /// Collapse repeats of the same fingerprint into one row. Remembered across launches.
+    var grouped: Bool {
+        didSet { UserDefaults.standard.set(grouped, forKey: "boop.inbox.grouped") }
+    }
     private(set) var loadedOnce = false
+
+    init() {
+        grouped = UserDefaults.standard.object(forKey: "boop.inbox.grouped") as? Bool ?? true
+    }
 
     var projects: [Project] {
         var seen = Set<String>()
@@ -44,7 +52,7 @@ final class InboxModel {
         error = nil
         defer { loading = false; loadedOnce = true }
         do {
-            let page = try await client.events(project: project, level: level)
+            let page = try await client.events(project: project, level: level, grouped: grouped)
             withAnimation(DS.Motion.settle) {
                 events = page.events
                 cursor = page.nextCursor
@@ -59,7 +67,7 @@ final class InboxModel {
         loadingMore = true
         defer { loadingMore = false }
         do {
-            let page = try await client.events(project: project, level: level, before: cursor)
+            let page = try await client.events(project: project, level: level, grouped: grouped, before: cursor)
             let known = Set(events.map(\.id))
             withAnimation(DS.Motion.settle) {
                 events += page.events.filter { !known.contains($0.id) }
@@ -75,9 +83,10 @@ struct InboxView: View {
     @Environment(AppSession.self) private var session
     @Binding var selected: EventRoute?
     @State private var model = InboxModel()
+    @State private var path: [GroupRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             list
                 .background(DS.Colors.bg)
                 .navigationTitle("Inbox")
@@ -94,6 +103,10 @@ struct InboxView: View {
                 .task { if !model.loadedOnce { await reload() } }
                 .onChange(of: model.level) { Task { await reload() } }
                 .onChange(of: model.project) { Task { await reload() } }
+                .onChange(of: model.grouped) { Task { await reload() } }
+                .navigationDestination(for: GroupRoute.self) { route in
+                    GroupView(route: route, selected: $selected)
+                }
         }
     }
 
@@ -120,7 +133,11 @@ struct InboxView: View {
                     Section {
                         ForEach(group.events) { event in
                             Button {
-                                selected = EventRoute(id: event.id, summary: nil)
+                                if event.isRepeated {
+                                    path.append(GroupRoute(event: event))
+                                } else {
+                                    selected = EventRoute(id: event.id, summary: nil)
+                                }
                             } label: {
                                 EventRow(event: event)
                             }
@@ -177,6 +194,7 @@ struct InboxView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Toggle("Group repeats", systemImage: "square.stack.3d.up", isOn: $model.grouped)
                 Picker("Level", selection: $model.level) {
                     Text("All levels").tag(Level?.none)
                     ForEach(Level.allCases) { l in
@@ -225,11 +243,21 @@ struct EventRow: View {
                         Text("· silenced").font(DS.Text.caption).foregroundStyle(DS.Colors.textInactive)
                     }
                 }
-                Text(event.title)
-                    .font(DS.Text.rowTitle)
-                    .foregroundStyle(DS.Colors.ink)
-                    .lineLimit(1)
-                if !event.body.isEmpty {
+                HStack(spacing: 8) {
+                    Text(event.title)
+                        .font(DS.Text.rowTitle)
+                        .foregroundStyle(DS.Colors.ink)
+                        .lineLimit(1)
+                    if let g = event.group, g.count > 1 {
+                        CountPill(count: g.count)
+                    }
+                }
+                if let g = event.group, g.count > 1 {
+                    Text(Formatting.seenRange(g))
+                        .font(DS.Text.meta)
+                        .foregroundStyle(DS.Colors.textSecondary)
+                        .lineLimit(1)
+                } else if !event.body.isEmpty {
                     Text(event.body)
                         .font(DS.Text.meta)
                         .foregroundStyle(DS.Colors.textMuted)
@@ -237,13 +265,36 @@ struct EventRow: View {
                 }
             }
             Spacer(minLength: 8)
-            Text(Formatting.relative(event.createdAt))
-                .font(DS.Text.caption)
-                .foregroundStyle(DS.Colors.textMuted)
-                .monospacedDigit()
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(Formatting.relative(event.createdAt))
+                    .font(DS.Text.caption)
+                    .foregroundStyle(DS.Colors.textMuted)
+                    .monospacedDigit()
+                if event.isRepeated {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(DS.Colors.textFaint)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+    }
+}
+
+/// "×47" pill for grouped rows.
+struct CountPill: View {
+    let count: Int
+
+    var body: some View {
+        Text("×\(count)")
+            .font(DS.Text.small)
+            .foregroundStyle(DS.Colors.accentHover)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 1)
+            .background(DS.Colors.accentTint, in: Capsule())
+            .monospacedDigit()
     }
 }
 

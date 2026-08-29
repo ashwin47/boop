@@ -23,6 +23,10 @@ type Config struct {
 	AdminUser     string
 	AdminPassword string
 
+	// MCPToken, when set, is a bearer token that grants read-only access to the
+	// MCP endpoint (/mcp). Device credentials and admin logins work there too.
+	MCPToken string
+
 	APNS APNS
 }
 
@@ -69,6 +73,7 @@ func Load() (Config, error) {
 		LogLevel:      env("BOOP_LOG_LEVEL", "info"),
 		AdminUser:     env("BOOP_ADMIN_USER", ""),
 		AdminPassword: env("BOOP_ADMIN_PASSWORD", ""),
+		MCPToken:      strings.TrimSpace(env("BOOP_MCP_TOKEN", "")),
 		APNS: APNS{
 			TeamID:         env("APNS_TEAM_ID", ""),
 			KeyID:          env("APNS_KEY_ID", ""),
@@ -99,6 +104,9 @@ func Load() (Config, error) {
 	}
 	if c.AdminPassword != "" && len(c.AdminPassword) < 8 {
 		return c, fmt.Errorf("BOOP_ADMIN_PASSWORD must be at least 8 characters")
+	}
+	if c.MCPToken != "" && len(c.MCPToken) < 16 {
+		return c, fmt.Errorf("BOOP_MCP_TOKEN must be at least 16 characters")
 	}
 	if c.APNS.Environment != "production" && c.APNS.Environment != "sandbox" {
 		return c, fmt.Errorf("APNS_ENVIRONMENT must be production or sandbox, got %q", c.APNS.Environment)

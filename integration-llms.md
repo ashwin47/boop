@@ -40,9 +40,10 @@ Send a JSON object. Only `title` is required.
 | `source` | string | Optional, ≤ 200. What produced the event: `"cron"`, `"error_tracker"`, `"github_actions"`, your library's name. Used for filtering. |
 | `type` | string | Optional, ≤ 200. A category within the source, e.g. `"error"`, `"deploy"`. |
 | `external_id` | string | Optional, ≤ 200. Your own id for the event (for cross-referencing). Not used for deduplication. |
-| `fingerprint` | string | Optional, ≤ 200. A stable grouping key for "the same thing happening again". Stored and indexed; not used for deduplication in v1. |
+| `fingerprint` | string | Optional, ≤ 200. A stable grouping key for "the same thing happening again". The inbox collapses events sharing a fingerprint into one row with a count and first/last seen, and silence rules can match on it. Every occurrence is still stored and pushed; it is not deduplication. |
 | `occurred_at` | string | Optional RFC 3339 timestamp (`2026-08-28T12:51:44Z`). Defaults to receipt time. |
 | `data` | object | Optional free-form JSON object, ≤ 256 KB. Anything you like; unknown keys are preserved verbatim. Arrays at the top level are rejected — it must be an object. |
+| `actions` | array | Optional, at most 3 of `{"label": string, "url": string}`. Buttons on the notification and in the event detail that open the URL. Label 1–40 characters; URL absolute with a scheme (`https://…` or an app scheme like `myapp://…`; `javascript:`, `data:`, `file:` are rejected). A client should expose this as a simple list, e.g. `actions: [{label: "Open deploy", url: run_url}]`. |
 
 ### `data` conventions the UI renders specially
 

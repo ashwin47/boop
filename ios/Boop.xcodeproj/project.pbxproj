@@ -25,25 +25,42 @@
 		4B9FC07E7380A1D0D1780C87 /* Figtree-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AC2789EE28600895E168A3DE /* Figtree-Bold.ttf */; };
 		51C449052FF42A30B7B69DF2 /* DS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 642012CF305FC80DD79E1EE9 /* DS.swift */; };
 		5B96FF0FC9128CBF085B34F3 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58DD3023423348952188CABE /* Components.swift */; };
+		5CF2392A2F8839F4BE2AA73A /* EventAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB2856E6C1D288CFF4C6C50 /* EventAction.swift */; };
 		5FE88931427EC015D8FB7FED /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDD09C39E086828C3B7F7B8 /* PairingView.swift */; };
 		60BB7FF986BB5AD43C26827F /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D5F31603EA140B870E759A /* KeychainStore.swift */; };
 		6BD0F44D0081D1C112A35286 /* Level.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC224EA686BB5FE8B77B253 /* Level.swift */; };
 		76ECCCF1BB162E57F2D9A9A4 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762667ADB3E12735F13061EE /* RootView.swift */; };
+		78C37125D8D4A518824B1D6A /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01935F3CE94F56DCBA5D9F8 /* NotificationService.swift */; };
 		7D38875E1C25CF5F210CE31E /* JSONTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6DFD4F3DE0BE4C3C517172 /* JSONTreeView.swift */; };
 		8A478E244646BC70067B23D0 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0727DAA2D68B5283AA8FF472 /* AppDelegate.swift */; };
+		91A16E0E8F24CFE7DF9B7E43 /* NotificationActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0789EA53290C184D9E003D27 /* NotificationActions.swift */; };
+		954342F259F3CC534FCD5266 /* BoopNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7F4162435984712AF1C11ABA /* BoopNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A56E6785C64B08EDBD2EA85B /* Figtree-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CBFB36C2F43E768891C23AF6 /* Figtree-Regular.ttf */; };
+		A64F7BAFF134E3C2DCA93B82 /* NotificationActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28B4DE5F8303B626E92C21A2 /* NotificationActionsTests.swift */; };
+		AB9C00965FCA0B89D77C4B6B /* EventMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5E5922218E13C67A9F91BE /* EventMarkdownTests.swift */; };
+		B3783D763567AA39715B9A2C /* NotificationActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0789EA53290C184D9E003D27 /* NotificationActions.swift */; };
 		B77F82FCC3B2DE3D93F03FC3 /* PairingPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CB15AD497B172787C42AAC /* PairingPayload.swift */; };
 		B9BD74FB187CA5C560B897A8 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117AE79DD532EB1BA1963F37 /* APIClient.swift */; };
+		C0307974F77B38C42BFC1F4B /* GroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796F84D4D1DA4921AD64F5DB /* GroupView.swift */; };
+		C7D0640A5F71A18A0B3BDE18 /* EventAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB2856E6C1D288CFF4C6C50 /* EventAction.swift */; };
 		C8EF442E2029DFA06AF9EACD /* EventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79BB01E3425BF57186501B5B /* EventTests.swift */; };
 		CB5FE8B95AE1C857776CCAFF /* PairingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C744AEF422D9779F59D6D9B /* PairingPayloadTests.swift */; };
 		CCB52AD25863617AEF10B183 /* BoopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C1391E032AE6F632E3CF80 /* BoopApp.swift */; };
 		D4A8AF3E6AEB42BEC66E3A4D /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C780959D77481AA196BF961 /* JSONValue.swift */; };
+		D6A2467551FF8A0C65A63B96 /* EventMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF31DD5C9E15C54024975A49 /* EventMarkdown.swift */; };
 		DCEEBEADFA8C0BC736BFD319 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B0894F62AB1E64E25A027E /* Formatting.swift */; };
 		F6A184D98CA3DF0C48990DA0 /* ProjectIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17EDE92A930BB8F749FF023 /* ProjectIcon.swift */; };
 		FAB9084713A2A313274E6A65 /* Figtree-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3186689D326577B56F291E27 /* Figtree-Medium.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		2B4F22AEA0B3AC6E026E54D9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D75B1A06897BCC5F7CE8A239 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FE559C429519CF6E4219B404;
+			remoteInfo = BoopNotificationService;
+		};
 		AA1C1E6C95462B31838C8FA7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D75B1A06897BCC5F7CE8A239 /* Project object */;
@@ -60,17 +77,35 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		5EABD3B77F28B7B632D0F4EA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				954342F259F3CC534FCD5266 /* BoopNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0129157CD73EBECB84F69C22 /* FormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattingTests.swift; sourceTree = "<group>"; };
 		0727DAA2D68B5283AA8FF472 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		0789EA53290C184D9E003D27 /* NotificationActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActions.swift; sourceTree = "<group>"; };
 		0A125D20CA61763DBACF3EF2 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
 		0A743627697D04F4516567DD /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		0DC224EA686BB5FE8B77B253 /* Level.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Level.swift; sourceTree = "<group>"; };
 		117AE79DD532EB1BA1963F37 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		21A9F07E87F33B74A2C52C05 /* Boop.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Boop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		24071F31542EBB6E9AF56D3B /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
+		28B4DE5F8303B626E92C21A2 /* NotificationActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionsTests.swift; sourceTree = "<group>"; };
 		28C1391E032AE6F632E3CF80 /* BoopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoopApp.swift; sourceTree = "<group>"; };
 		3186689D326577B56F291E27 /* Figtree-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Medium.ttf"; sourceTree = "<group>"; };
+		3A4A99E1519FCA5523A1A85A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4B5E5922218E13C67A9F91BE /* EventMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventMarkdownTests.swift; sourceTree = "<group>"; };
 		58DD3023423348952188CABE /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		5A790977C54183FCA8A2CF4E /* Figtree-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-SemiBold.ttf"; sourceTree = "<group>"; };
 		609791CD0E38060E89CCBFF6 /* NotificationTapUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationTapUITests.swift; sourceTree = "<group>"; };
@@ -78,8 +113,11 @@
 		75122E3FEFADBFE389DB9C21 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		762667ADB3E12735F13061EE /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		78F17F7F004605058FFA2618 /* ScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotUITests.swift; sourceTree = "<group>"; };
+		796F84D4D1DA4921AD64F5DB /* GroupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupView.swift; sourceTree = "<group>"; };
 		79BB01E3425BF57186501B5B /* EventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTests.swift; sourceTree = "<group>"; };
+		7BB2856E6C1D288CFF4C6C50 /* EventAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventAction.swift; sourceTree = "<group>"; };
 		7C744AEF422D9779F59D6D9B /* PairingPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPayloadTests.swift; sourceTree = "<group>"; };
+		7F4162435984712AF1C11ABA /* BoopNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BoopNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8063BF0B2841D7A9E8DA3624 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
 		88B0894F62AB1E64E25A027E /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		8A6DFD4F3DE0BE4C3C517172 /* JSONTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTreeView.swift; sourceTree = "<group>"; };
@@ -95,10 +133,12 @@
 		C17EDE92A930BB8F749FF023 /* ProjectIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectIcon.swift; sourceTree = "<group>"; };
 		C9D5F31603EA140B870E759A /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		CBFB36C2F43E768891C23AF6 /* Figtree-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Regular.ttf"; sourceTree = "<group>"; };
+		D01935F3CE94F56DCBA5D9F8 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		DECFDC77D38E3DB104B3B6E6 /* PairingFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingFlowUITests.swift; sourceTree = "<group>"; };
 		DF7CEEF38A16624007E14E93 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E19A870C0CFD9BA00298449D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E554071AD342FB99DF3BA5D0 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
+		EF31DD5C9E15C54024975A49 /* EventMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventMarkdown.swift; sourceTree = "<group>"; };
 		F49CA3B7C9B215A290E252AF /* BoopUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BoopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5F4E385D82C57FCAE48CDDC /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -116,6 +156,7 @@
 			isa = PBXGroup;
 			children = (
 				21A9F07E87F33B74A2C52C05 /* Boop.app */,
+				7F4162435984712AF1C11ABA /* BoopNotificationService.appex */,
 				9EF3C782D6E451C365D85AE5 /* BoopTests.xctest */,
 				F49CA3B7C9B215A290E252AF /* BoopUITests.xctest */,
 			);
@@ -145,8 +186,10 @@
 			isa = PBXGroup;
 			children = (
 				F5F4E385D82C57FCAE48CDDC /* APIClientTests.swift */,
+				4B5E5922218E13C67A9F91BE /* EventMarkdownTests.swift */,
 				79BB01E3425BF57186501B5B /* EventTests.swift */,
 				0129157CD73EBECB84F69C22 /* FormattingTests.swift */,
+				28B4DE5F8303B626E92C21A2 /* NotificationActionsTests.swift */,
 				7C744AEF422D9779F59D6D9B /* PairingPayloadTests.swift */,
 			);
 			path = BoopTests;
@@ -155,6 +198,7 @@
 		370EF1C7641E9E8489B97A6C /* Notifications */ = {
 			isa = PBXGroup;
 			children = (
+				0789EA53290C184D9E003D27 /* NotificationActions.swift */,
 				B66C8112F0031F188AD85583 /* PushManager.swift */,
 			);
 			path = Notifications;
@@ -192,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				0A125D20CA61763DBACF3EF2 /* EventDetailView.swift */,
+				796F84D4D1DA4921AD64F5DB /* GroupView.swift */,
 				8063BF0B2841D7A9E8DA3624 /* InboxView.swift */,
 				ABDD09C39E086828C3B7F7B8 /* PairingView.swift */,
 				762667ADB3E12735F13061EE /* RootView.swift */,
@@ -204,10 +249,20 @@
 			isa = PBXGroup;
 			children = (
 				2EBC1B59859E4A07AF4B257A /* Boop */,
+				9F134A8A9C55760CDE7B0028 /* BoopNotificationService */,
 				3069089B1315C8F05F333E33 /* BoopTests */,
 				D910B7B1AE503AB1CA23FB95 /* BoopUITests */,
 				1176C791D5E10B4FEE7029DD /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		9F134A8A9C55760CDE7B0028 /* BoopNotificationService */ = {
+			isa = PBXGroup;
+			children = (
+				3A4A99E1519FCA5523A1A85A /* Info.plist */,
+				D01935F3CE94F56DCBA5D9F8 /* NotificationService.swift */,
+			);
+			path = BoopNotificationService;
 			sourceTree = "<group>";
 		};
 		B1A3B1EAC582757D46F99295 /* Networking */ = {
@@ -244,6 +299,8 @@
 			children = (
 				ACD0500F93373A2432EC73D8 /* Device.swift */,
 				E554071AD342FB99DF3BA5D0 /* Event.swift */,
+				7BB2856E6C1D288CFF4C6C50 /* EventAction.swift */,
+				EF31DD5C9E15C54024975A49 /* EventMarkdown.swift */,
 				8C780959D77481AA196BF961 /* JSONValue.swift */,
 				0DC224EA686BB5FE8B77B253 /* Level.swift */,
 			);
@@ -307,10 +364,12 @@
 			buildPhases = (
 				CA78EF33ADFE16A279159C50 /* Sources */,
 				70545B44BD6C495CCF4CE230 /* Resources */,
+				5EABD3B77F28B7B632D0F4EA /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				03321C7861D2717B9C7F1DA8 /* PBXTargetDependency */,
 			);
 			name = Boop;
 			packageProductDependencies = (
@@ -318,6 +377,23 @@
 			productName = Boop;
 			productReference = 21A9F07E87F33B74A2C52C05 /* Boop.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FE559C429519CF6E4219B404 /* BoopNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 54B5E2FCEF08F002E537997D /* Build configuration list for PBXNativeTarget "BoopNotificationService" */;
+			buildPhases = (
+				17A474132356EA060963F57F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BoopNotificationService;
+			packageProductDependencies = (
+			);
+			productName = BoopNotificationService;
+			productReference = 7F4162435984712AF1C11ABA /* BoopNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -341,6 +417,10 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					FE559C429519CF6E4219B404 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = D2C7A418F16CBD03DB918192 /* Build configuration list for PBXProject "Boop" */;
@@ -358,6 +438,7 @@
 			projectRoot = "";
 			targets = (
 				A8738A21A24E7E622C597C1C /* Boop */,
+				FE559C429519CF6E4219B404 /* BoopNotificationService */,
 				133AB7E3837B87BD56434B0E /* BoopTests */,
 				0F7CC37BAA4A164C74F66E10 /* BoopUITests */,
 			);
@@ -380,6 +461,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		17A474132356EA060963F57F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5CF2392A2F8839F4BE2AA73A /* EventAction.swift in Sources */,
+				91A16E0E8F24CFE7DF9B7E43 /* NotificationActions.swift in Sources */,
+				78C37125D8D4A518824B1D6A /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		79A1CB032A5A8142B061F121 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -395,8 +486,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A5E700A1862667E236E6005 /* APIClientTests.swift in Sources */,
+				AB9C00965FCA0B89D77C4B6B /* EventMarkdownTests.swift in Sources */,
 				C8EF442E2029DFA06AF9EACD /* EventTests.swift in Sources */,
 				1454903D0DB084517DAA7359 /* FormattingTests.swift in Sources */,
+				A64F7BAFF134E3C2DCA93B82 /* NotificationActionsTests.swift in Sources */,
 				CB5FE8B95AE1C857776CCAFF /* PairingPayloadTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -413,13 +506,17 @@
 				51C449052FF42A30B7B69DF2 /* DS.swift in Sources */,
 				40DAF9AD8EE9227AB85A4161 /* Device.swift in Sources */,
 				05C3BF86490C9B9181AD8426 /* Event.swift in Sources */,
+				C7D0640A5F71A18A0B3BDE18 /* EventAction.swift in Sources */,
 				021583DF5827CD9A311ABA73 /* EventDetailView.swift in Sources */,
+				D6A2467551FF8A0C65A63B96 /* EventMarkdown.swift in Sources */,
 				DCEEBEADFA8C0BC736BFD319 /* Formatting.swift in Sources */,
+				C0307974F77B38C42BFC1F4B /* GroupView.swift in Sources */,
 				0CE510E367D7351D023FB764 /* InboxView.swift in Sources */,
 				7D38875E1C25CF5F210CE31E /* JSONTreeView.swift in Sources */,
 				D4A8AF3E6AEB42BEC66E3A4D /* JSONValue.swift in Sources */,
 				60BB7FF986BB5AD43C26827F /* KeychainStore.swift in Sources */,
 				6BD0F44D0081D1C112A35286 /* Level.swift in Sources */,
+				B3783D763567AA39715B9A2C /* NotificationActions.swift in Sources */,
 				B77F82FCC3B2DE3D93F03FC3 /* PairingPayload.swift in Sources */,
 				5FE88931427EC015D8FB7FED /* PairingView.swift in Sources */,
 				F6A184D98CA3DF0C48990DA0 /* ProjectIcon.swift in Sources */,
@@ -433,6 +530,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		03321C7861D2717B9C7F1DA8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FE559C429519CF6E4219B404 /* BoopNotificationService */;
+			targetProxy = 2B4F22AEA0B3AC6E026E54D9 /* PBXContainerItemProxy */;
+		};
 		53DC373C2B292831FF5347CF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A8738A21A24E7E622C597C1C /* Boop */;
@@ -446,6 +548,23 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0D23E65DBA9D29F38ED521FC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BoopNotificationService/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.Boop.NotificationService;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		1F7AB9551BC1D788ACF480CA /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -513,7 +632,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -523,6 +642,23 @@
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY = YES;
 				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		BCCDFC81596A832D7D4EA0D0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BoopNotificationService/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.Boop.NotificationService;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -603,7 +739,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -697,6 +833,15 @@
 			buildConfigurations = (
 				E94022645CECA0946A55E9E6 /* Debug */,
 				C98988CA0E29F9720A1773B1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		54B5E2FCEF08F002E537997D /* Build configuration list for PBXNativeTarget "BoopNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D23E65DBA9D29F38ED521FC /* Debug */,
+				BCCDFC81596A832D7D4EA0D0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

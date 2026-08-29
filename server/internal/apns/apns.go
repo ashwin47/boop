@@ -43,6 +43,41 @@ type Notification struct {
 	ProjectID string
 	// Prominent asks for a time-sensitive, high-priority alert (critical events).
 	Prominent bool
+	// Actions are shown as buttons on the notification (long press / pull down).
+	Actions []Action
+}
+
+// Action is a notification button that opens a URL.
+type Action struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
+// CategoryWithActions is the aps.category set when a notification carries
+// actions. The app's notification service extension registers a matching
+// category with the real labels before the alert is shown.
+const CategoryWithActions = "boop.event.actions"
+
+// Payload builds the APNs JSON body for n.
+func Payload(n Notification) ([]byte, error) {
+	aps := map[string]any{
+		"alert": map[string]string{"title": n.Title, "body": n.Body},
+		"sound": "default",
+	}
+	if n.Prominent {
+		aps["interruption-level"] = "time-sensitive"
+	}
+	payload := map[string]any{
+		"aps":        aps,
+		"event_id":   n.EventID,
+		"project_id": n.ProjectID,
+	}
+	if len(n.Actions) > 0 {
+		aps["category"] = CategoryWithActions
+		aps["mutable-content"] = 1
+		payload["actions"] = n.Actions
+	}
+	return json.Marshal(payload)
 }
 
 // Error is a non-2xx response from APNs.
@@ -182,18 +217,7 @@ func (c *Client) Send(ctx context.Context, deviceToken string, n Notification) (
 }
 
 func (c *Client) send(ctx context.Context, deviceToken string, n Notification) (string, error) {
-	payload := map[string]any{
-		"aps": map[string]any{
-			"alert": map[string]string{"title": n.Title, "body": n.Body},
-			"sound": "default",
-		},
-		"event_id":   n.EventID,
-		"project_id": n.ProjectID,
-	}
-	if n.Prominent {
-		payload["aps"].(map[string]any)["interruption-level"] = "time-sensitive"
-	}
-	body, err := json.Marshal(payload)
+	body, err := Payload(n)
 	if err != nil {
 		return "", err
 	}

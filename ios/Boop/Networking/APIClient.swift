@@ -58,10 +58,12 @@ struct APIClient: Sendable {
         let _: Empty = try await request("DELETE", "/api/v1/devices/\(id)")
     }
 
-    func events(project: String? = nil, level: Level? = nil, before: String? = nil, limit: Int = 50) async throws -> EventPage {
+    func events(project: String? = nil, level: Level? = nil, fingerprint: String? = nil, grouped: Bool = false, before: String? = nil, limit: Int = 50) async throws -> EventPage {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if let project, !project.isEmpty { items.append(.init(name: "project", value: project)) }
         if let level { items.append(.init(name: "level", value: level.rawValue)) }
+        if let fingerprint, !fingerprint.isEmpty { items.append(.init(name: "fingerprint", value: fingerprint)) }
+        if grouped { items.append(.init(name: "grouped", value: "true")) }
         if let before { items.append(.init(name: "before", value: before)) }
         return try await request("GET", "/api/v1/events", query: items)
     }

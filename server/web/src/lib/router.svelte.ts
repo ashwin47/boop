@@ -2,7 +2,7 @@
 // unknown path, so deep links work.
 
 export interface Route {
-  name: 'inbox' | 'event' | 'projects' | 'devices' | 'settings' | 'setup' | 'notfound'
+  name: 'inbox' | 'event' | 'group' | 'projects' | 'devices' | 'settings' | 'setup' | 'notfound'
   params: Record<string, string>
 }
 
@@ -11,6 +11,8 @@ function parse(path: string): Route {
   if (p === '/') return { name: 'inbox', params: {} }
   const ev = p.match(/^\/events\/([^/]+)$/)
   if (ev) return { name: 'event', params: { id: decodeURIComponent(ev[1]) } }
+  const grp = p.match(/^\/groups\/([^/]+)\/([^/]+)$/)
+  if (grp) return { name: 'group', params: { project: decodeURIComponent(grp[1]), fingerprint: decodeURIComponent(grp[2]) } }
   if (p === '/projects') return { name: 'projects', params: {} }
   if (p === '/devices') return { name: 'devices', params: {} }
   if (p === '/settings') return { name: 'settings', params: {} }
@@ -50,6 +52,11 @@ export function link(e: MouseEvent) {
   if (!href || !href.startsWith('/')) return
   e.preventDefault()
   router.navigate(href)
+}
+
+/** Path of the occurrences page for a fingerprint within a project. */
+export function groupPath(project: string, fingerprint: string): string {
+  return `/groups/${encodeURIComponent(project)}/${encodeURIComponent(fingerprint)}`
 }
 
 export { parse as parseRoute }

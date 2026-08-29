@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRoute } from './router.svelte'
+import { parseRoute, groupPath } from './router.svelte'
 
 describe('parseRoute', () => {
   it('maps paths to routes', () => {
@@ -9,5 +9,11 @@ describe('parseRoute', () => {
     expect(parseRoute('/settings')).toEqual({ name: 'settings', params: {} })
     expect(parseRoute('/setup')).toEqual({ name: 'setup', params: {} })
     expect(parseRoute('/nope').name).toBe('notfound')
+  })
+  it('round-trips group paths with awkward fingerprints', () => {
+    const path = groupPath('prj_1', 'lib/a.ex:49 KeyError?')
+    expect(path).toBe('/groups/prj_1/lib%2Fa.ex%3A49%20KeyError%3F')
+    expect(parseRoute(path)).toEqual({ name: 'group', params: { project: 'prj_1', fingerprint: 'lib/a.ex:49 KeyError?' } })
+    expect(parseRoute('/groups/prj_1').name).toBe('notfound')
   })
 })

@@ -36,7 +36,7 @@ Your apps POST events with a project API key. The Go server redacts and stores t
 | --- | --- |
 | Go server (API, SQLite, APNs, embedded web UI) | `server/` |
 | Web UI (Svelte, built into the binary) | `server/web/` |
-| iOS app (SwiftUI, iOS 26, you build and sign it) | `ios/` — see [ios/README.md](ios/README.md) |
+| iOS app (SwiftUI, iOS 26, you build and sign it) + notification service extension | `ios/` — see [ios/README.md](ios/README.md) |
 | Client libraries | separate repos — see [Integrations](#integrations) |
 | Native desktop client | planned |
 
@@ -80,6 +80,22 @@ curl http://localhost:8080/api/v1/events \
 ```
 
 Levels: `info`, `success`, `warning`, `error`, `critical`. Anything in `data` is kept as-is (recognised sections such as `exception`, `stacktrace`, `tags`, `context` and `breadcrumbs` get a nicer rendering) after sensitive keys are redacted.
+
+**Actions.** Up to three buttons that open a URL — on the notification itself (long-press or pull down) and in the event detail:
+
+```bash
+curl http://localhost:8080/api/v1/events \
+  -H "Authorization: Bearer boop_proj_..." -H "Content-Type: application/json" \
+  -d '{"title": "Payment received", "body": "£19.99", "level": "success",
+       "actions": [{"label": "Open in Stripe", "url": "https://dashboard.stripe.com/payments/pi_1"},
+                   {"label": "Open order", "url": "myshop://orders/42"}]}'
+```
+
+Labels are 40 characters or fewer; URLs must be absolute (`https://…` or an app scheme). Tapping the notification body still opens the event in Boop.
+
+**Grouping.** Send the same `fingerprint` for the same problem and the inbox (web and phone) shows one row per fingerprint — `KeyError ×47 · First seen 09:31 · Last seen 10:42` — that opens the individual occurrences. Toggle it with "Group repeats". `GET /api/v1/events?grouped=true` is the API behind it. Grouping only affects display; every occurrence is stored and pushed (use a [silence](#silences) to stop pushes).
+
+**Copy for an agent.** On the phone, the share button on an event offers *Copy*, *Copy as Markdown* and *Share*. The Markdown version lays the event out as sections — exception, environment, stack trace, context, breadcrumbs, data, links — ready to paste into Claude, ChatGPT or whatever you use. *Share* hands it straight to the assistant's app without the clipboard.
 
 From a shell script:
 
@@ -165,7 +181,7 @@ All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message"
 | --- | --- | --- | --- |
 | GET | `/health` | none | `{"status":"ok"}` |
 | POST | `/api/v1/events` | project key | Create event, returns `{id, created_at}` |
-| GET | `/api/v1/events?project=&level=&source=&silenced=&before=&limit=` | device or none | List, newest first; `next_cursor` feeds `before`; `silenced=true\|false` filters |
+| GET | `/api/v1/events?project=&level=&source=&fingerprint=&since=&until=&silenced=&grouped=&before=&limit=` | device or none | List, newest first; `next_cursor` feeds `before`; `silenced=true\|false` filters; `grouped=true` collapses repeated fingerprints into one row with `group: {count, first_seen, last_seen}` |
 | GET | `/api/v1/events/:id` | device or none | Full event |
 | GET | `/api/v1/events/:id/deliveries` | device or none | Push attempts for an event |
 | GET/POST | `/api/v1/projects` | admin | List / create (returns `api_key` once) |
@@ -178,16 +194,33 @@ All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message"
 | PATCH/DELETE | `/api/v1/devices/:id` | device (self) or admin | Update / remove |
 | GET | `/api/v1/devices` | admin | List paired devices |
 | GET | `/api/v1/status` | admin | Health, APNs state, counts, last push |
-| GET/PATCH | `/api/v1/settings` | admin | `retention_days`, `redact_keys`, `setup_completed` |
+| GET/PATCH | `/api/v1/settings` | admin | `retention_days`, `redact_keys`, `setup_completed`, `mcp_enabled` (read-only `mcp_token_set` says whether `BOOP_MCP_TOKEN` is configured) |
 | GET/POST | `/api/v1/silences` | admin | Rules that stop matching events from being pushed: `{field: fingerprint\|title\|source, value, project_id?, note?}` |
 | GET | `/api/v1/silences/:id` | admin | One rule |
 | DELETE | `/api/v1/silences/:id` | admin | Remove a rule (already-silenced events keep their flag) |
 | POST | `/api/v1/events/:id/unsilence` | admin | Clear the flag and push the event now |
 | POST | `/api/v1/test` | admin | Create a test event and push it |
+| POST | `/mcp` | MCP token, device, or admin | Read-only [MCP](#mcp-for-ai-agents) endpoint (Streamable HTTP); `404 mcp_disabled` when switched off in Settings |
+
+Event fields on `POST /api/v1/events`: `title` (required), `body`, `level`, `source`, `type`, `external_id`, `fingerprint`, `occurred_at`, `data`, `actions` — see [`integration-llms.md`](integration-llms.md) for limits.
 
 Credentials: project keys (`boop_proj_...`) can only create events; device credentials (`boop_dev_...`) can only read events and manage their own device. Only SHA-256 hashes are stored.
 
 **Admin auth.** Set `BOOP_ADMIN_USER` and `BOOP_ADMIN_PASSWORD` and the web UI shows a sign-in screen; admin endpoints then need the session cookie it sets (`POST /api/v1/auth/login`) or HTTP Basic credentials (`curl -u user:pass …`). Sessions last 30 days and live in memory, so a restart signs everyone out. Leave both unset and everything is open — only do that behind your own proxy, Tailscale, or VPN. Either way, project and device credentials are refused on admin endpoints, so a leaked client secret never grants admin rights.
+
+## MCP (for AI agents)
+
+Boop speaks the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp` (Streamable HTTP), read-only. Point the agent you already use at it and ask things like *"what errors happened overnight?"*, *"show me critical events from Infra"*, *"what started failing after 14:00?"* or *"get the full context for the latest KeyError"*. There is no LLM inside Boop; it just serves structured context.
+
+Tools: `list_projects`, `list_events` (filters, time window, `grouped`), `search_events`, `get_event` (full payload), `get_event_group` (every occurrence of a fingerprint).
+
+Set `BOOP_MCP_TOKEN` (16+ characters) and use it as a bearer token. A device credential works too, and so does the admin login; with admin auth off and no token the endpoint is open, like the rest of the read API. Project keys are refused. **Settings → MCP** has a switch that turns the endpoint off entirely.
+
+```bash
+claude mcp add --transport http boop https://boop.example.com/mcp --header "Authorization: Bearer $BOOP_MCP_TOKEN"
+```
+
+Any client that supports Streamable HTTP with a custom header can connect the same way.
 
 ## Configuration
 
@@ -200,6 +233,7 @@ Credentials: project keys (`boop_proj_...`) can only create events; device crede
 | `BOOP_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `BOOP_ADMIN_USER` | | Web UI / admin API username; set together with the password |
 | `BOOP_ADMIN_PASSWORD` | | 8+ characters. Unset = no login |
+| `BOOP_MCP_TOKEN` | | Bearer token for the read-only [MCP endpoint](#mcp-for-ai-agents); 16+ characters |
 | `APNS_TEAM_ID` | | Apple Developer team id |
 | `APNS_KEY_ID` | | Id of the APNs auth key |
 | `APNS_BUNDLE_ID` | | Bundle id of your Boop iOS build |
@@ -244,6 +278,10 @@ The app posts the token to `/api/v1/pairing/exchange`, stores the returned devic
 
 Some events you want stored but not on your phone: a known flaky job, a noisy warning. On any event's page click **Silence events like this** and pick what to match — its fingerprint, its title, or its source — for that project or every project. Matching events still arrive in the inbox (marked *silenced*) and in the iOS app, but no push is sent. Filter the inbox to **Silenced only** to review them; a silenced event's page shows the rule that caught it with **Remove rule** and **Unsilence and push now**. Manage all rules under **Settings → Silences**. Fingerprint and source match exactly; title ignores case.
 
+## Grouping and actions
+
+Events that share a `fingerprint` within a project are shown as one row (`KeyError ×47 · First seen 09:31 · Last seen 10:42`) in the web inbox and on the phone; open it for the individual occurrences, or untick **Group repeats** to see every row. Events can also carry up to three `actions` (`{label, url}`) that appear as buttons on the push notification and in the event detail — open the deploy, the Stripe payment, the error in your tracker. See [Send an event](#send-an-event).
+
 ## Redaction
 
 Values under these keys are replaced with `[REDACTED]` anywhere in `data` before storage: `password`, `password_confirmation`, `secret`, `token`, `access_token`, `refresh_token`, `api_key`, `authorization`, `cookie`, `set-cookie`, `private_key`. Matching is case-insensitive and treats `-` and `_` alike. Add your own keys in Settings.
@@ -258,6 +296,10 @@ make build                                                          # bin/boop w
 ```
 
 Requires Go 1.27 and Node 24 (see `.tool-versions`). The SQLite driver is pure Go, so `CGO_ENABLED=0` builds work everywhere.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Releases are tagged `vX.Y.Z`; the server, web UI and iOS app share the version.
 
 ## Licence
 

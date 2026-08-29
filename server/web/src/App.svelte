@@ -5,6 +5,7 @@
   import StatusDot from './lib/ui/StatusDot.svelte'
   import Inbox from './pages/Inbox.svelte'
   import EventDetail from './pages/EventDetail.svelte'
+  import Group from './pages/Group.svelte'
   import Projects from './pages/Projects.svelte'
   import Devices from './pages/Devices.svelte'
   import Settings from './pages/Settings.svelte'
@@ -56,7 +57,7 @@
     { label: 'Devices', href: '/devices' },
     { label: 'Settings', href: '/settings' },
   ]
-  const activeTab = $derived(route.name === 'event' ? '/' : router.path)
+  const activeTab = $derived(route.name === 'event' || route.name === 'group' ? '/' : router.path)
 </script>
 
 <div class="page">
@@ -93,6 +94,8 @@
           <Inbox />
         {:else if route.name === 'event'}
           <EventDetail id={route.params.id} />
+        {:else if route.name === 'group'}
+          <Group project={route.params.project} fingerprint={route.params.fingerprint} />
         {:else if route.name === 'projects'}
           <Projects />
         {:else if route.name === 'devices'}

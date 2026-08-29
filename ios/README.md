@@ -2,7 +2,7 @@
 
 The native client for a self-hosted [Boop](../README.md) server. You build and sign it yourself with your own Apple Developer account; nothing is distributed through Boop infrastructure.
 
-Requires Xcode 26 and iOS 26.
+Requires Xcode 26 and iOS 26. App version 1.2.0 needs server 1.2.0 or newer for grouping, actions and the share menu (older servers still work; those features simply do not appear).
 
 ## Build it
 
@@ -14,7 +14,7 @@ Then in Xcode:
 
 1. Select the **Boop** target → **Signing & Capabilities**.
 2. Pick your **Team**.
-3. Change the **Bundle Identifier** from `com.example.Boop` to your own (for example `com.yourname.Boop`). This exact value must also be set as `APNS_BUNDLE_ID` on your server.
+3. Change the **Bundle Identifier** from `com.example.Boop` to your own (for example `com.yourname.Boop`). This exact value must also be set as `APNS_BUNDLE_ID` on your server. Do the same for the **BoopNotificationService** target: its identifier must be your app id plus `.NotificationService` (for example `com.yourname.Boop.NotificationService`).
 4. Make sure the **Push Notifications** capability is present (it comes from `Boop.entitlements`). Xcode will register the App ID with Apple automatically when signing is set up.
 5. Plug in your iPhone, select it as the run destination, and press Run. Push notifications do not work in the simulator.
 
@@ -34,7 +34,10 @@ The server address in the pairing code comes from `BOOP_BASE_URL`. It must be re
 ## What it does
 
 - Inbox grouped by day, pull to refresh, cursor pagination, project and level filters.
-- Event detail with exception, stacktrace (in-app frames highlighted), tags, context, breadcrumbs, raw JSON, share.
+- Group repeats: events sharing a fingerprint show as one row (`KeyError ×47 · First seen 09:31 · Last seen 10:42`) that opens the occurrences. Toggle in the filter menu.
+- Event detail with exception, stacktrace (in-app frames highlighted), tags, context, breadcrumbs, raw JSON, and action buttons.
+- Share menu: **Copy** (plain text), **Copy as Markdown** (sectioned, ready for an AI assistant) and **Share** (straight into another app).
+- Notification actions: an event's `actions` become buttons on the push (long-press it). The `BoopNotificationService` extension registers them just in time; tapping one opens its URL.
 - Notification tap opens the event and fetches the latest data; if the server is unreachable the push's title and body are shown with a retry.
 - Device credential is stored in the Keychain. The app never sees project API keys or APNs keys.
 - Re-registers with APNs on every launch and updates the server when the token changes.
@@ -52,6 +55,14 @@ cat > /tmp/push.json <<'JSON'
 {"aps":{"alert":{"title":"Uini · KeyError","body":"key :can_palette? not found"},"sound":"default"},"event_id":"evt_REPLACE","project_id":"prj_REPLACE"}
 JSON
 xcrun simctl push booted com.example.Boop /tmp/push.json
+
+# With action buttons (long-press the banner; simctl does not run the service
+# extension, so on the simulator the buttons only appear on a real device):
+cat > /tmp/push-actions.json <<'JSON'
+{"aps":{"alert":{"title":"Shop · Payment received","body":"£19.99"},"sound":"default","category":"boop.event.actions","mutable-content":1},
+ "event_id":"evt_REPLACE","project_id":"prj_REPLACE","actions":[{"label":"Open in Stripe","url":"https://dashboard.stripe.com"}]}
+JSON
+xcrun simctl push booted com.example.Boop /tmp/push-actions.json
 ```
 
 ## Tests

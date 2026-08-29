@@ -18,6 +18,19 @@ export interface ProjectCreated extends Project {
   api_key: string
 }
 
+/** A button on the notification and in the event detail that opens a URL. */
+export interface EventAction {
+  label: string
+  url: string
+}
+
+/** Present on grouped listings: this row stands for `count` occurrences of its fingerprint. */
+export interface GroupInfo {
+  count: number
+  first_seen: string
+  last_seen: string
+}
+
 export interface Event {
   id: string
   external_id?: string
@@ -36,6 +49,8 @@ export interface Event {
   created_at: string
   silenced: boolean
   silence_id?: string
+  actions?: EventAction[]
+  group?: GroupInfo
 }
 
 export type SilenceField = 'fingerprint' | 'title' | 'source'
@@ -121,6 +136,8 @@ export interface Settings {
   redact_keys: string[]
   default_redact_keys: string[]
   setup_completed: boolean
+  mcp_enabled: boolean
+  mcp_token_set: boolean
 }
 
 export class ApiError extends Error {
@@ -165,9 +182,9 @@ export const api = {
   settings: () => request<Settings>('GET', '/api/v1/settings'),
   updateSettings: (patch: Partial<Settings>) => request<Settings>('PATCH', '/api/v1/settings', patch),
 
-  events: (params: { project?: string; level?: string; source?: string; before?: string; limit?: number; silenced?: string } = {}) => {
+  events: (params: { project?: string; level?: string; source?: string; fingerprint?: string; before?: string; limit?: number; silenced?: string; grouped?: boolean } = {}) => {
     const q = new URLSearchParams()
-    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') q.set(k, String(v))
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '' && v !== false) q.set(k, String(v))
     const qs = q.toString()
     return request<EventPage>('GET', '/api/v1/events' + (qs ? '?' + qs : ''))
   },

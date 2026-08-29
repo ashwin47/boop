@@ -18,6 +18,10 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
     let createdAt: Date
     /// True when a silence rule stopped this event from being pushed.
     let silenced: Bool
+    /// Buttons that open a URL, shown on the notification and in the detail.
+    let actions: [EventAction]
+    /// Present in grouped listings: this event is the latest of `group.count` occurrences.
+    let group: GroupInfo?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -29,7 +33,7 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         case source, type, level, title, body, fingerprint, data
         case occurredAt = "occurred_at"
         case createdAt = "created_at"
-        case silenced
+        case silenced, actions, group
     }
 
     init(from decoder: any Decoder) throws {
@@ -50,11 +54,13 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         occurredAt = try c.decode(Date.self, forKey: .occurredAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         silenced = try c.decodeIfPresent(Bool.self, forKey: .silenced) ?? false
+        actions = try c.decodeIfPresent([EventAction].self, forKey: .actions) ?? []
+        group = try c.decodeIfPresent(GroupInfo.self, forKey: .group)
     }
 
     init(id: String, projectID: String, projectName: String, projectIcon: String = "", source: String = "", type: String = "",
          level: Level, title: String, body: String = "", fingerprint: String = "", data: JSONValue = .object([:]),
-         occurredAt: Date, createdAt: Date, silenced: Bool = false) {
+         occurredAt: Date, createdAt: Date, silenced: Bool = false, actions: [EventAction] = [], group: GroupInfo? = nil) {
         self.id = id
         self.externalID = nil
         self.projectID = projectID
@@ -71,13 +77,30 @@ struct Event: Codable, Identifiable, Hashable, Sendable {
         self.occurredAt = occurredAt
         self.createdAt = createdAt
         self.silenced = silenced
+        self.actions = actions
+        self.group = group
     }
+
+    /// True when this row stands for more than one occurrence.
+    var isRepeated: Bool { (group?.count ?? 1) > 1 }
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (a: Event, b: Event) -> Bool { a.id == b.id && a.createdAt == b.createdAt }
 
     /// Rich sections recognised from `data`; everything else is `rest`.
     var sections: EventSections { EventSections(data: data) }
+}
+
+struct GroupInfo: Codable, Hashable, Sendable {
+    let count: Int
+    let firstSeen: Date
+    let lastSeen: Date
+
+    enum CodingKeys: String, CodingKey {
+        case count
+        case firstSeen = "first_seen"
+        case lastSeen = "last_seen"
+    }
 }
 
 struct EventPage: Codable, Sendable {

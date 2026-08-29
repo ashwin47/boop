@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Design tokens, ported from `Design System/tokens/*.css`.
+/// Design tokens, mirroring the CSS variables in `server/web/src/app.css`.
 enum DS {
     // MARK: Colors
     enum Colors {
@@ -91,7 +91,7 @@ enum DS {
         static var title: Font { .figtree(28, .bold) }
     }
 
-    /// Restrained motion: the design system wants near-instant state changes.
+    /// Restrained motion: state changes should feel near-instant.
     enum Motion {
         static let snappy = Animation.spring(response: 0.32, dampingFraction: 0.86)
         static let gentle = Animation.easeOut(duration: 0.18)
