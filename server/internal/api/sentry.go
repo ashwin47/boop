@@ -16,8 +16,10 @@ import (
 	"compress/zlib"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +36,15 @@ import (
 const (
 	sentryMaxCompressed   = 2 << 20  // 2 MiB on the wire
 	sentryMaxDecompressed = 16 << 20 // 16 MiB expanded
+)
+
+// Bounds on the tag set copied into an event's data. A pathological tag set
+// (many tags, or a single huge value) would otherwise push data past
+// events.MaxDataSize, which Create rejects — silently dropping an event the SDK
+// was told (200) it delivered.
+const (
+	maxSentryTags     = 50
+	maxSentryTagBytes = 1024
 )
 
 // sentryEnvelope accepts a Sentry SDK envelope: POST /api/{project_id}/envelope/.
@@ -101,9 +112,23 @@ func (s *Server) sentryBody(w http.ResponseWriter, r *http.Request) ([]byte, boo
 		}
 		defer zr.Close()
 		reader = zr
+	case "", "identity":
+		// No encoding; read the body as-is.
+	default:
+		// Reject an encoding we can't decode rather than parsing the still-
+		// compressed bytes as a plaintext envelope and silently storing nothing.
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "unsupported Content-Encoding")
+		return nil, false
 	}
 	body, err := io.ReadAll(io.LimitReader(reader, sentryMaxDecompressed))
 	if err != nil {
+		// MaxBytesReader tripped: 413 so the SDK treats it as "too large, drop"
+		// rather than retrying, matching readJSON on the native endpoint.
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "request body too large")
+			return nil, false
+		}
 		writeError(w, http.StatusBadRequest, "invalid", "could not read request body")
 		return nil, false
 	}
@@ -122,26 +147,29 @@ func (s *Server) ingestEnvelope(ctx context.Context, p projects.Project, body []
 		if !ok {
 			continue
 		}
-		s.ingestOne(ctx, p, in)
-		if firstID == "" {
-			firstID = evID
+		if s.ingestOne(ctx, p, in) {
+			if firstID == "" {
+				firstID = evID // echo only an id we actually stored
+			}
+			count++
 		}
-		count++
 	}
 	return firstID, count
 }
 
-// ingestOne stores one mapped event and pushes it unless a silence rule matches.
-func (s *Server) ingestOne(ctx context.Context, p projects.Project, in events.Input) {
+// ingestOne stores one mapped event and pushes it unless a silence rule matches,
+// reporting whether it was actually stored.
+func (s *Server) ingestOne(ctx context.Context, p projects.Project, in events.Input) bool {
 	e, err := s.Events.Create(ctx, p.ID, in, s.redactor(ctx))
 	if err != nil {
 		s.Log.Warn("sentry.event_rejected", "project_id", p.ID, "error", err.Error())
-		return
+		return false
 	}
 	s.Log.Info("event.created", "event_id", e.ID, "project_id", p.ID, "event_level", e.Level, "via", "sentry")
 	if silenced := s.applySilence(ctx, &e); !silenced {
 		s.Dispatcher.Enqueue(e, p)
 	}
+	return true
 }
 
 // ---- envelope parsing ----
@@ -270,7 +298,7 @@ func (s *Server) mapSentryEvent(raw []byte) (events.Input, string, bool) {
 			in.Title = firstLine(msg)
 		}
 		in.Body = sentryExceptionBody(ex, ev)
-		in.Fingerprint = sentryFingerprint(ev, "sentry:"+firstNonEmpty(ex.Type, ex.Module))
+		in.Fingerprint = sentryFingerprint(ev, exceptionFingerprint(ex))
 		if in.Level == "" {
 			in.Level = levels.Error
 		}
@@ -278,7 +306,9 @@ func (s *Server) mapSentryEvent(raw []byte) (events.Input, string, bool) {
 		in.Type = "message"
 		in.Title = firstLine(msg)
 		in.Body = sentryContextLine(ev)
-		in.Fingerprint = sentryFingerprint(ev, "sentry:msg:"+firstLine(msg))
+		// Group on the unformatted template so interpolated messages ("user 1
+		// failed", "user 2 failed") share a fingerprint, as they do in Sentry.
+		in.Fingerprint = sentryFingerprint(ev, "sentry:msg:"+firstLine(sentryMessageTemplate(ev)))
 		if in.Level == "" {
 			in.Level = levels.Info
 		}
@@ -315,30 +345,64 @@ func sentryLevel(l string) string {
 	}
 }
 
-// sentryMessage returns the human message from a logentry or the message field,
-// which may be a plain string or a {message, formatted} object.
-func sentryMessage(ev sentryEvent) string {
-	if ev.Logentry.Formatted != "" {
-		return ev.Logentry.Formatted
-	}
-	if ev.Logentry.Message != "" {
-		return ev.Logentry.Message
+// messageParts pulls the message template and its formatted rendering from a
+// logentry or the message field (a plain string, or a {message, formatted}
+// object). The title uses the formatted text (sentryMessage); grouping uses the
+// unformatted template (sentryMessageTemplate).
+func messageParts(ev sentryEvent) (template, formatted string) {
+	if ev.Logentry.Message != "" || ev.Logentry.Formatted != "" {
+		return ev.Logentry.Message, ev.Logentry.Formatted
 	}
 	if len(ev.Message) == 0 {
-		return ""
+		return "", ""
 	}
 	var str string
 	if json.Unmarshal(ev.Message, &str) == nil && str != "" {
-		return str
+		return str, str
 	}
 	var m struct {
 		Message   string `json:"message"`
 		Formatted string `json:"formatted"`
 	}
 	if json.Unmarshal(ev.Message, &m) == nil {
-		return firstNonEmpty(m.Formatted, m.Message)
+		return m.Message, m.Formatted
 	}
-	return ""
+	return "", ""
+}
+
+// sentryMessage returns the human-readable message, preferring the formatted
+// (interpolated) text — this is what the title shows.
+func sentryMessage(ev sentryEvent) string {
+	t, f := messageParts(ev)
+	return firstNonEmpty(f, t)
+}
+
+// sentryMessageTemplate returns the message used for grouping. Sentry groups
+// message events on the unformatted template, not the interpolated result, so
+// interpolated variants share a fingerprint.
+func sentryMessageTemplate(ev sentryEvent) string {
+	t, f := messageParts(ev)
+	return firstNonEmpty(t, f)
+}
+
+// exceptionFingerprint derives a grouping key from the exception type plus the
+// top in-app frame (module/function), approximating Sentry's stacktrace-based
+// grouping so a silence rule can target one call site rather than every
+// occurrence of an exception type across the project.
+func exceptionFingerprint(ex sentryException) string {
+	parts := []string{"sentry"}
+	if t := firstNonEmpty(ex.Type, ex.Module); t != "" {
+		parts = append(parts, t)
+	}
+	if fr, ok := topFrame(ex.Stacktrace.Frames); ok {
+		if loc := firstNonEmpty(fr.Module, fr.Filename); loc != "" {
+			parts = append(parts, loc)
+		}
+		if fr.Function != "" {
+			parts = append(parts, fr.Function)
+		}
+	}
+	return strings.Join(parts, ":")
 }
 
 // sentryExceptionBody builds a compact, phone-readable body: where it happened,
@@ -446,14 +510,14 @@ func sentryData(ev sentryEvent) json.RawMessage {
 		"culprit":     ev.Culprit,
 	} {
 		if v != "" {
-			m[k] = v
+			m[k] = clip(v, events.MaxBody) // bound each field so data can't exceed MaxDataSize
 		}
 	}
 	if ev.Sdk.Name != "" {
 		m["sdk"] = strings.TrimSuffix(ev.Sdk.Name+"/"+ev.Sdk.Version, "/")
 	}
-	if len(ev.Tags) > 0 && string(ev.Tags) != "null" {
-		m["tags"] = json.RawMessage(ev.Tags)
+	if tags := cappedTags(ev.Tags); len(tags) > 0 {
+		m["tags"] = tags
 	}
 	if n := len(ev.Exception.Values); n > 0 {
 		ex := ev.Exception.Values[n-1]
@@ -462,7 +526,7 @@ func sentryData(ev sentryEvent) json.RawMessage {
 			e["type"] = ex.Type
 		}
 		if ex.Value != "" {
-			e["value"] = ex.Value
+			e["value"] = clip(ex.Value, events.MaxBody)
 		}
 		frames := ex.Stacktrace.Frames
 		if start := len(frames) - 10; start > 0 { // keep at most the last 10 frames
@@ -470,7 +534,7 @@ func sentryData(ev sentryEvent) json.RawMessage {
 		}
 		var out []map[string]any
 		for _, fr := range frames {
-			out = append(out, map[string]any{"file": fr.Filename, "func": fr.Function, "line": fr.Lineno, "in_app": fr.InApp})
+			out = append(out, map[string]any{"file": clip(fr.Filename, maxSentryTagBytes), "func": clip(fr.Function, maxSentryTagBytes), "line": fr.Lineno, "in_app": fr.InApp})
 		}
 		if len(out) > 0 {
 			e["frames"] = out
@@ -483,7 +547,65 @@ func sentryData(ev sentryEvent) json.RawMessage {
 	if err != nil {
 		return nil
 	}
+	if len(b) > events.MaxDataSize {
+		// Last resort: shed the largest optional pieces so Create still accepts
+		// the event rather than rejecting the whole thing for size.
+		delete(m, "tags")
+		delete(m, "exception")
+		if b, err = json.Marshal(m); err != nil {
+			return nil
+		}
+	}
 	return json.RawMessage(b)
+}
+
+// cappedTags copies Sentry tags into a bounded map, keeping the event's data
+// under events.MaxDataSize. Tags arrive as an object {k: v} or, from older SDKs,
+// an array of [k, v] pairs; values are rendered as display strings.
+func cappedTags(raw json.RawMessage) map[string]string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	out := map[string]string{}
+	add := func(k, v string) {
+		if k == "" || len(out) >= maxSentryTags {
+			return
+		}
+		out[clip(k, maxSentryTagBytes)] = clip(v, maxSentryTagBytes)
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) == nil {
+		// Sort so which tags survive the cap is deterministic, not dependent on
+		// Go's randomized map iteration order.
+		keys := make([]string, 0, len(obj))
+		for k := range obj {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			add(k, tagValue(obj[k]))
+		}
+		return out
+	}
+	var pairs [][]json.RawMessage
+	if json.Unmarshal(raw, &pairs) == nil {
+		for _, p := range pairs {
+			if len(p) == 2 {
+				add(tagValue(p[0]), tagValue(p[1]))
+			}
+		}
+	}
+	return out
+}
+
+// tagValue renders a raw tag key or value as a display string, unquoting plain
+// strings and passing other JSON through verbatim.
+func tagValue(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return string(raw)
 }
 
 // ---- small helpers ----

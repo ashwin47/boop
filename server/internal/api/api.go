@@ -66,7 +66,7 @@ func (s *Server) Handler() http.Handler {
 	// Sentry SDK compatibility: point a Sentry DSN at Boop and existing Sentry
 	// clients report here. The DSN public key is a Boop project API key; the
 	// numeric project id in the path is ignored.
-	mux.HandleFunc("POST /api/{project_id}/envelope/", s.sentryEnvelope)
+	mux.HandleFunc("POST /api/{project_id}/envelope/{$}", s.sentryEnvelope)
 
 	// Reading events: device credential or the (unauthenticated) web UI.
 	mux.Handle("GET /api/v1/events", s.readerAuth(s.listEvents))

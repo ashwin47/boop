@@ -48,7 +48,7 @@ func envelope(eventID string, event any) []byte {
 	return b.Bytes()
 }
 
-func (e *env) latestEvent(key string) events0 {
+func (e *env) latestEvent() events0 {
 	e.t.Helper()
 	r := e.do("GET", "/api/v1/events?limit=1", "", nil)
 	if r.status != 200 {
@@ -107,7 +107,7 @@ func TestSentryExceptionEnvelope(t *testing.T) {
 		t.Fatalf("echoed id = %q", id)
 	}
 
-	got := e.latestEvent(key)
+	got := e.latestEvent()
 	if got.Level != "error" {
 		t.Errorf("level = %q, want error", got.Level)
 	}
@@ -117,7 +117,9 @@ func TestSentryExceptionEnvelope(t *testing.T) {
 	if got.Source != "sentry" || got.Type != "exception" {
 		t.Errorf("source/type = %q/%q", got.Source, got.Type)
 	}
-	if got.Fingerprint != "sentry:ValueError" {
+	// Grouping folds in the top in-app frame, so two call sites raising the same
+	// exception type get distinct fingerprints (closer to Sentry's grouping).
+	if got.Fingerprint != "sentry:ValueError:app/views.py:charge" {
 		t.Errorf("fingerprint = %q", got.Fingerprint)
 	}
 	if !strings.Contains(got.Body, "app/views.py:42 in charge") {
@@ -142,7 +144,7 @@ func TestSentryMultilineExceptionTitle(t *testing.T) {
 	if r := e.postSentry("/api/1/envelope/", key, nil, envelope("0", event)); r.status != 200 {
 		t.Fatalf("status = %d", r.status)
 	}
-	if got := e.latestEvent(key).Title; got != "ArgumentError: bad billing period" {
+	if got := e.latestEvent().Title; got != "ArgumentError: bad billing period" {
 		t.Errorf("title = %q, want clean single line", got)
 	}
 }
@@ -158,7 +160,7 @@ func TestSentryLevelMapping(t *testing.T) {
 			if r.status != http.StatusOK {
 				t.Fatalf("status = %d", r.status)
 			}
-			got := e.latestEvent(key)
+			got := e.latestEvent()
 			if got.Level != want {
 				t.Errorf("level %q mapped to %q, want %q", in, got.Level, want)
 			}
@@ -180,7 +182,7 @@ func TestSentryExplicitFingerprint(t *testing.T) {
 	if r := e.postSentry("/api/1/envelope/", key, nil, envelope("0", event)); r.status != 200 {
 		t.Fatalf("status = %d", r.status)
 	}
-	if got := e.latestEvent(key).Fingerprint; got != "my-group:v2" {
+	if got := e.latestEvent().Fingerprint; got != "my-group:v2" {
 		t.Errorf("fingerprint = %q, want my-group:v2", got)
 	}
 }
@@ -202,7 +204,7 @@ func TestSentryGzipEnvelope(t *testing.T) {
 	if r.status != http.StatusOK {
 		t.Fatalf("status = %d (%s)", r.status, r.raw)
 	}
-	got := e.latestEvent(key)
+	got := e.latestEvent()
 	if got.Level != "critical" || got.Title != "PanicError: kaboom" {
 		t.Errorf("got level=%q title=%q", got.Level, got.Title)
 	}
@@ -251,5 +253,102 @@ func TestSentryTransactionItemsIgnored(t *testing.T) {
 		if len(page.Events) != 0 {
 			t.Fatalf("expected no stored events, got %d", len(page.Events))
 		}
+	}
+}
+
+// A single oversized tag value must not push data past events.MaxDataSize and
+// silently drop the event: the tag is capped and the event is still stored.
+func TestSentryOversizedTagStillStored(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	event := map[string]any{
+		"event_id": "0",
+		"message":  "boom",
+		"tags":     map[string]any{"huge": strings.Repeat("x", 300*1024)},
+	}
+	if r := e.postSentry("/api/1/envelope/", key, nil, envelope("0", event)); r.status != http.StatusOK {
+		t.Fatalf("status = %d", r.status)
+	}
+	got := e.latestEvent() // fatals if nothing was stored
+	if got.Title != "boom" {
+		t.Errorf("title = %q", got.Title)
+	}
+	if len(got.Data) > 256*1024 {
+		t.Errorf("data not capped: %d bytes", len(got.Data))
+	}
+}
+
+// A huge base field (culprit) is bounded too, so it can't push data past
+// MaxDataSize and silently drop the event.
+func TestSentryOversizedCulpritStillStored(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	event := map[string]any{
+		"event_id": "0",
+		"culprit":  strings.Repeat("y", 300*1024),
+		"exception": map[string]any{"values": []map[string]any{{
+			"type": "ValueError", "value": "x",
+		}}},
+	}
+	if r := e.postSentry("/api/1/envelope/", key, nil, envelope("0", event)); r.status != http.StatusOK {
+		t.Fatalf("status = %d", r.status)
+	}
+	got := e.latestEvent() // fatals if nothing was stored
+	if len(got.Data) > 256*1024 {
+		t.Errorf("data not capped: %d bytes", len(got.Data))
+	}
+}
+
+// An encoding Boop can't decode is rejected (415) rather than parsed as a
+// plaintext envelope and silently storing nothing.
+func TestSentryUnsupportedEncodingRejected(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	body := envelope("0", map[string]any{"message": "x"})
+	r := e.postSentry("/api/1/envelope/", key, map[string]string{"Content-Encoding": "br"}, body)
+	if r.status != http.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want 415", r.status)
+	}
+}
+
+// Interpolated messages share a fingerprint because grouping uses the unformatted
+// logentry template, not the formatted result.
+func TestSentryMessageTemplateFingerprint(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	fp := func(formatted string) string {
+		event := map[string]any{
+			"event_id": "0",
+			"logentry": map[string]any{"message": "user %s failed", "formatted": formatted},
+		}
+		if r := e.postSentry("/api/1/envelope/", key, nil, envelope("0", event)); r.status != 200 {
+			t.Fatalf("status = %d", r.status)
+		}
+		return e.latestEvent().Fingerprint
+	}
+	if a, b := fp("user 1 failed"), fp("user 2 failed"); a != b || a != "sentry:msg:user %s failed" {
+		t.Errorf("fingerprints = %q / %q, want equal sentry:msg:user %%s failed", a, b)
+	}
+}
+
+// The envelope route matches only the exact path, not a subtree, so a trailing
+// segment is a 404 rather than silently accepted.
+func TestSentryEnvelopeSubpathNotMatched(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	r := e.postSentry("/api/1/envelope/anything/else", key, nil, envelope("0", map[string]any{"message": "x"}))
+	if r.status != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", r.status)
+	}
+}
+
+// An over-large body answers 413 (payload too large) so SDKs drop it, matching
+// the native endpoint, rather than 400.
+func TestSentryOversizedBody(t *testing.T) {
+	e := newEnv(t)
+	_, key := e.createProject("app")
+	big := bytes.Repeat([]byte("a"), 3<<20) // above sentryMaxCompressed
+	if r := e.postSentry("/api/1/envelope/", key, nil, big); r.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", r.status)
 	}
 }

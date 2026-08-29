@@ -173,13 +173,15 @@ TypeScript, ESM + CJS, zero runtime dependencies, Node 18+.
 
 ### Sentry SDKs — drop-in DSN
 
-Boop speaks the Sentry ingest protocol, so any existing Sentry SDK (Python, Node, Go, Ruby, PHP, browser, …) can report to Boop with no code changes — just point the DSN at your Boop host and use a project API key as the public key:
+Boop speaks the Sentry ingest protocol, so any existing server-side Sentry SDK (Python, Node, Go, Ruby, PHP, …) can report to Boop with no code changes — just point the DSN at your Boop host and use a project API key as the public key:
 
 ```
 SENTRY_DSN=https://boop_proj_xxxxxxxx@boop.example.com/1
 ```
 
 The part before `@` is a Boop project's API key; the host is your Boop server; the trailing project id is required by the DSN format but ignored (the key selects the project). Boop implements the SDK envelope endpoint (`/api/{id}/envelope/`) that every current Sentry SDK uses, including gzipped bodies.
+
+> **Keep the DSN server-side.** A real Sentry DSN's public key is safe to ship in frontend bundles, but Boop's is a write-capable project API key — treat it like any other secret and don't embed it in browser or other client-side code.
 
 Each Sentry event becomes a Boop event: the exception `Type: value` (or the message) is the title; the body carries the culprit, top stack frame and `env`/`release`; levels map `fatal→critical`, `error`, `warning`, `info`/`debug→info`; `source` is `sentry`; and Sentry's grouping fingerprint is preserved so [silence rules](#api) work per error group. Full event context (platform, tags, top frames) is kept in the event's `data` and redacted like any other event. Transactions, sessions and other non-error items are accepted and ignored.
 
