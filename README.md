@@ -171,18 +171,31 @@ client.exception(err, { tags: { env: 'prod' } })       // rich error data
 
 TypeScript, ESM + CJS, zero runtime dependencies, Node 18+.
 
+### Sentry SDKs — drop-in DSN
+
+Boop speaks the Sentry ingest protocol, so any existing Sentry SDK (Python, Node, Go, Ruby, PHP, browser, …) can report to Boop with no code changes — just point the DSN at your Boop host and use a project API key as the public key:
+
+```
+SENTRY_DSN=https://boop_proj_xxxxxxxx@boop.example.com/1
+```
+
+The part before `@` is a Boop project's API key; the host is your Boop server; the trailing project id is required by the DSN format but ignored (the key selects the project). Boop implements the SDK envelope endpoint (`/api/{id}/envelope/`) that every current Sentry SDK uses, including gzipped bodies.
+
+Each Sentry event becomes a Boop event: the exception `Type: value` (or the message) is the title; the body carries the culprit, top stack frame and `env`/`release`; levels map `fatal→critical`, `error`, `warning`, `info`/`debug→info`; `source` is `sentry`; and Sentry's grouping fingerprint is preserved so [silence rules](#api) work per error group. Full event context (platform, tags, top frames) is kept in the event's `data` and redacted like any other event. Transactions, sessions and other non-error items are accepted and ignored.
+
 ### Anything else
 
 `curl` is a first-class client (see [Send an event](#send-an-event)), and [`integration-llms.md`](integration-llms.md) is a prompt you can hand to an LLM to generate a client for any other language that behaves like the ones above.
 
 ## API
 
-All endpoints are under `/api/v1`. Errors are JSON: `{"error": "code", "message": "..."}`.
+All endpoints are under `/api/v1` (except the Sentry envelope endpoint). Errors are JSON: `{"error": "code", "message": "..."}`.
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | GET | `/health` | none | `{"status":"ok"}` |
 | POST | `/api/v1/events` | project key | Create event, returns `{id, created_at}` |
+| POST | `/api/:id/envelope/` | Sentry DSN key | [Sentry SDK](#sentry-sdks--drop-in-dsn) ingest; DSN public key is a project API key |
 | GET | `/api/v1/events?project=&level=&source=&fingerprint=&since=&until=&silenced=&grouped=&before=&limit=` | device or none | List, newest first; `next_cursor` feeds `before`; `silenced=true\|false` filters; `grouped=true` collapses repeated fingerprints into one row with `group: {count, first_seen, last_seen}` |
 | GET | `/api/v1/events/:id` | device or none | Full event |
 | GET | `/api/v1/events/:id/deliveries` | device or none | Push attempts for an event |
