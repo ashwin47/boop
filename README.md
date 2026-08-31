@@ -239,6 +239,8 @@ For services with their own shape, select **Custom template**. Templates receive
 {"content": {{json .Title}}}
 ```
 
+`{{json .Field}}` emits its own surrounding quotes, so write `{"text": {{json .Title}}}`, not `{"text": "{{json .Title}}"}` — wrapping it in quotes produces invalid JSON. A template that renders invalid JSON is still sent; the receiver rejects it and the attempt is recorded as `failed`.
+
 Additional headers are merged with the default `Content-Type: application/json`; a configured `Content-Type` wins. Header values are write-only and are masked after saving. A webhook URL is a credential for many services, so deliveries show only its host, never its full URL.
 
 > **Trust and SSRF note.** Webhook URLs can reach any network address visible to the Boop server, including private services. Only configure targets you trust; webhook configuration is admin-only and carries the same trust boundary as APNs credentials. Network allowlists and private-address blocking are not yet implemented.

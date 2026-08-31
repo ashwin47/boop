@@ -281,6 +281,7 @@
               <Select bind:value={webhookMode} options={[{ value: 'json', label: 'Native JSON' }, { value: 'custom', label: 'Custom template' }]} aria-label="Webhook payload mode" />
               {#if webhookMode === 'custom'}
                 <label>Body template <textarea bind:value={webhookTemplate} placeholder={'{"text": {{json .Title}}}'}></textarea></label>
+                <p class="muted caption">Fields: <code>.Title</code>, <code>.Body</code>, <code>.Level</code>, <code>.Source</code>, <code>.Project.Name</code>. Wrap any interpolated value in <code>{'{{json .Field}}'}</code> — it emits its own quotes, so don't put quotes around it.</p>
               {/if}
               <label>Headers <textarea bind:value={webhookHeaders} aria-label="Webhook headers JSON"></textarea></label>
               <div class="form-controls">
