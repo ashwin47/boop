@@ -84,14 +84,14 @@ export interface Device {
 export interface Delivery {
   id: string
   event_id: string
-  device_id: string
-  device_name: string
-	  target_type: 'device' | 'webhook'
-	  webhook_id?: string
-	  webhook_host?: string
+  device_id?: string
+  device_name?: string
+  target_type: 'device' | 'webhook'
+  webhook_id?: string
+  webhook_host?: string
   status: 'sent' | 'failed' | 'skipped'
   apns_id?: string
-	  http_status?: number
+  http_status?: number
   error?: string
   attempted_at: string
 }
